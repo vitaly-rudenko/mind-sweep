@@ -1,0 +1,3 @@
+groupChatOnly: '❌ This command can only be executed in a group chat'
+privateChatOnly: '❌ This command can only be executed in a private chat'
+unknownUser: 'Unknown user'
