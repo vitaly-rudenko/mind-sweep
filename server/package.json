@@ -1,0 +1,37 @@
+{
+  "name": "mind-sweep-server",
+  "version": "0.0.1",
+  "description": "Server-side implementation of MindSweep",
+  "main": "dist/app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc-watch --onSuccess \"node --env-file=.env --inspect dist/app.js\"",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/app.js",
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitaly-rudenko/mind-sweep.git"
+  },
+  "keywords": [
+    "productivity"
+  ],
+  "author": "Vitaly Rudenko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vitaly-rudenko/mind-sweep/issues"
+  },
+  "homepage": "https://github.com/vitaly-rudenko/mind-sweep#readme",
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "tsc-watch": "^6.0.4",
+    "typescript": "^5.4.2"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3"
+  }
+}
