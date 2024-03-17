@@ -34,7 +34,7 @@ services:
       POSTGRES_USER: "mindsweep"
       POSTGRES_PASSWORD: "p4ssw0rd"
     volumes:
-      - "ms_postgres_data:/var/lib/postgresql/data"
+      - "./.postgresql/data:/var/lib/postgresql/data"
     networks:
       - "ms_network"
 
@@ -44,10 +44,6 @@ services:
     image: redis
     networks:
       - "ms_network"
-
-volumes:
-  ms_postgres_data:
-    driver: local
 
 networks:
   ms_network:
