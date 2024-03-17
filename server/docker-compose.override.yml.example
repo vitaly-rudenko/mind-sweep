@@ -1,0 +1,19 @@
+version: '3.7'
+services:
+  ms_app:
+    # profiles:
+    #   - donotstart
+    environment:
+      # testing
+      LOG_DATABASE_QUERIES: "$LOG_DATABASE_QUERIES"
+      USE_TEST_MODE: "$USE_TEST_MODE"
+    ports:
+      - "3000:3000"
+
+  ms_postgres:
+    ports:
+      - "5432:5432"
+
+  ms_redis:
+    ports:
+      - "6379:6379"

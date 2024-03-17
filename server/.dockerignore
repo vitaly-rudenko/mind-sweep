@@ -1,0 +1,12 @@
+Dockerfile
+.dockerignore
+node_modules
+.git
+.env
+.env.example
+.gitignore
+docs
+README.md
+scripts
+.cert
+dump.sql

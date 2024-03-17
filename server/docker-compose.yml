@@ -1,0 +1,54 @@
+version: '3.7'
+services:
+  ms_app:
+    container_name: ms_app
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - ms_postgres
+      - ms_redis
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "postgres://mindsweep:p4ssw0rd@ms_postgres:5432/mindsweep"
+      REDIS_URL: "redis://ms_redis:6379"
+      # security
+      CORS_ORIGIN: "$CORS_ORIGIN"
+      # telegram
+      TELEGRAM_BOT_TOKEN: "$TELEGRAM_BOT_TOKEN"
+      WEB_APP_URL: "$WEB_APP_URL"
+      WEB_APP_NAME: "$WEB_APP_NAME"
+      # logging
+      LOG_LEVEL: "info"
+      DEBUG_CHAT_ID: "$DEBUG_CHAT_ID"
+    networks:
+      - "ms_network"
+
+  ms_postgres:
+    container_name: ms_postgres
+    image: postgres:13-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "mindsweep"
+      POSTGRES_USER: "mindsweep"
+      POSTGRES_PASSWORD: "p4ssw0rd"
+    volumes:
+      - "ms_postgres_data:/var/lib/postgresql/data"
+    networks:
+      - "ms_network"
+
+  ms_redis:
+    container_name: ms_redis
+    restart: unless-stopped
+    image: redis
+    networks:
+      - "ms_network"
+
+volumes:
+  ms_postgres_data:
+    driver: local
+
+networks:
+  ms_network:
+    driver: bridge
