@@ -2,14 +2,13 @@ import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
 import type { z } from 'zod'
-import { fileURLToPath } from 'url'
 import { localeFileSchema } from './schemas.js'
 
 const en = flattenLocaleFile(
   localeFileSchema.parse(
     yaml.load(
       fs.readFileSync(
-        path.join(path.dirname(fileURLToPath(import.meta.url)), 'locales', 'en.yml'),
+        path.join(process.cwd(), 'locales', 'en.yml'),
         'utf8',
       )
     )
