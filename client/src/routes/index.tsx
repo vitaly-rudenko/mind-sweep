@@ -5,5 +5,5 @@ export const Route = createFileRoute('/')({
 })
 
 function IndexComponent() {
-  return <Navigate to='/tasks' />
+  return <Navigate to='/notes' />
 }
