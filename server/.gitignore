@@ -143,3 +143,4 @@ dist/
 .env
 .DS_Store
 .postgresql
+docker-compose.override.yml
