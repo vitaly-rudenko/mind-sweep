@@ -17,6 +17,10 @@ import { createWebAppUrlGenerator } from './web-app/utils.js'
 import { ApiError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError } from 'zod'
+import { editedMessage, message } from 'telegraf/filters'
+import { Client } from '@notionhq/client'
+import type { Message } from 'telegraf/types'
+import type { PageObjectResponse, QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -86,6 +90,324 @@ async function start() {
   bot.use(withUserId())
   bot.use(withChatId())
   bot.use(withLocale())
+
+  const databaseId = env.NOTION_TEST_DATABASE_ID
+  const notion = new Client({ auth: env.NOTION_TEST_INTEGRATION_SECRET })
+
+  type TelegramMessageVendorEntity = {
+    type: 'telegram_message'
+    id: string
+    metadata: {
+      chatId: number
+      messageId: number
+      fromUserId: number
+    }
+  }
+
+  type NotionPageVendorEntity = {
+    type: 'notion_page'
+    id: string
+    metadata: {
+      databaseId: string
+      pageId: string
+    }
+  }
+
+  type VendorEntity = TelegramMessageVendorEntity | NotionPageVendorEntity
+
+  type Note = {
+    content: string
+    tags: string[]
+    vendorEntities: VendorEntity[]
+  }
+
+  function createTelegramMessageVendorEntity(message: {
+    message_id: number
+    chat: { id: number }
+    from?: { id: number }
+  }): TelegramMessageVendorEntity {
+    if (!message.from) {
+      throw new Error('Invalid vendor entity: message.from is missing')
+    }
+
+    return {
+      type: 'telegram_message',
+      id: `${message.chat.id}_${message.message_id}`,
+      metadata: {
+        chatId: message.chat.id,
+        messageId: message.message_id,
+        fromUserId: message.from.id,
+      }
+    }
+  }
+
+  function createNotionPageVendorEntity(databaseId: string, pageId: string): NotionPageVendorEntity {
+    return {
+      type: 'notion_page',
+      id: `${databaseId}_${pageId}`,
+      metadata: {
+        databaseId,
+        pageId,
+      }
+    }
+  }
+
+  function getTelegramVendorEntity(vendorEntities: VendorEntity[]) {
+    return vendorEntities.find((entity): entity is TelegramMessageVendorEntity => entity.type === 'telegram_message')
+  }
+
+  function getNotionPageVendorEntity(vendorEntities: VendorEntity[]) {
+    return vendorEntities.find((entity): entity is NotionPageVendorEntity => entity.type === 'notion_page')
+  }
+
+  function telegramMessageToNote(message: Message.TextMessage, vendorEntities: VendorEntity[] = []): Note {
+    const content = message.text
+    const tags = (message.entities ?? [])
+      .filter(entity => entity.type === 'hashtag')
+      .map(entity => content.slice(entity.offset + 1, entity.offset + entity.length))
+
+    return {
+      content,
+      tags,
+      vendorEntities: [
+        ...vendorEntities.filter(entity => entity.type !== 'telegram_message'),
+        createTelegramMessageVendorEntity(message),
+      ],
+    }
+  }
+
+  function serializeVendorEntityToNotionProperties(vendorEntities: VendorEntity[]): Parameters<Client['pages']['create']>[0]['properties'] {
+    const properties: Parameters<Client['pages']['create']>[0]['properties'] = {}
+
+    for (const vendorEntity of vendorEntities) {
+      if (vendorEntity.type === 'notion_page') continue
+
+      properties[`entity:${vendorEntity.type}`] = {
+        type: 'rich_text',
+        rich_text: [
+          {
+            type: 'text',
+            text: {
+              content: `${vendorEntity.id}:${JSON.stringify(vendorEntity.metadata)}`
+            }
+          }
+        ]
+      }
+    }
+
+    return properties
+  }
+
+  function serializeNoteToNotion(note: Note): Parameters<Client['pages']['create']>[0]['properties'] {
+    return {
+      'Name': {
+        type: 'title',
+        title: [
+          {
+            type: 'text',
+            text: {
+              content: note.content,
+            },
+          },
+        ],
+      },
+      'Tags': {
+        type: 'multi_select',
+        multi_select: note.tags.map((tag) => ({ name: tag })),
+      },
+      ...serializeVendorEntityToNotionProperties(note.vendorEntities),
+    }
+  }
+
+  function serializeVendorEntitiesToNotionDatabaseQueryFilter(vendorEntities: VendorEntity[]): Parameters<Client['databases']['query']>[0]['filter'] {
+    return {
+      property: `entity:${vendorEntities[0].type}`,
+      rich_text: {
+        starts_with: `${vendorEntities[0].id}:`,
+      },
+    }
+  }
+
+  async function setupNotionDatabase(databaseId: string) {
+    await notion.databases.update({
+      database_id: databaseId,
+      properties: {
+        'Name': {
+          type: 'title',
+          title: {},
+        },
+        'Tags': {
+          type: 'multi_select',
+          multi_select: {},
+        },
+        'entity:telegram_message': {
+          type: 'rich_text',
+          rich_text: {},
+        }
+      }
+    })
+  }
+
+  async function createNotionNote(note: Note) {
+    await setupNotionDatabase(databaseId)
+
+    await notion.pages.create({
+      parent: {
+        database_id: databaseId,
+      },
+      properties: serializeNoteToNotion(note),
+    })
+  }
+
+  async function updateNotionNote(note: Note) {
+    const notionPageVendorEntity = getNotionPageVendorEntity(note.vendorEntities)
+    if (!notionPageVendorEntity) throw new Error('Unsupported vendor entity type')
+
+    await setupNotionDatabase(notionPageVendorEntity.metadata.databaseId)
+
+    await notion.pages.update({
+      page_id: notionPageVendorEntity.metadata.pageId,
+      properties: serializeNoteToNotion(note),
+    })
+  }
+
+  async function findNotionNote(vendorEntities: VendorEntity[]) {
+    const response = await notion.databases.query({
+      database_id: databaseId,
+      page_size: 1,
+      filter: serializeVendorEntitiesToNotionDatabaseQueryFilter(vendorEntities),
+    })
+
+    return parseNotionQueryDatabaseResponse(response).at(0)
+  }
+
+  function parseNotionQueryDatabaseResponse(response: QueryDatabaseResponse) {
+    const notes: Note[] = []
+
+    for (const page of response.results) {
+      if (!('properties' in page)) continue
+
+      const nameProperty = page.properties['Name']
+      const tagsProperty = page.properties['Tags']
+      const entityProperties: [string, PageObjectResponse['properties'][number]][] = Object
+        .entries(page.properties)
+        .filter(([name]) => name.startsWith('entity:'))
+
+      if (!('title' in nameProperty)) continue
+      if (!('multi_select' in tagsProperty) || !Array.isArray(tagsProperty.multi_select)) continue
+
+      const content = nameProperty.title.at(0)?.plain_text
+      if (!content) continue
+
+      const tags = tagsProperty.multi_select.map((tag) => tag.name)
+
+      const vendorEntities: VendorEntity[] = [createNotionPageVendorEntity(databaseId, page.id)]
+      for (const [name, property] of entityProperties) {
+        if (!('rich_text' in property)) continue
+
+        const type = name.slice('entity:'.length)
+        if (type !== 'telegram_message') continue
+
+        const serialized = property.rich_text[0]?.plain_text
+        if (!serialized) continue
+
+        vendorEntities.push({
+          type,
+          id: serialized.slice(0, serialized.indexOf(':')),
+          metadata: JSON.parse(serialized.slice(serialized.indexOf(':') + 1)),
+        })
+      }
+
+      notes.push({ content, tags, vendorEntities })
+    }
+
+    return notes
+  }
+
+  bot.command('sync', async (context) => {
+    const response = await notion.databases.query({
+      database_id: databaseId,
+    })
+
+    const notes = parseNotionQueryDatabaseResponse(response)
+
+    for (const note of notes) {
+      const telegramVendorEntity = getTelegramVendorEntity(note.vendorEntities)
+
+      if (telegramVendorEntity) {
+        await bot.telegram.editMessageText(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, undefined, note.content)
+      } else {
+        const message = await bot.telegram.sendMessage(context.chat.id, note.content)
+        const syncedNote = telegramMessageToNote(message, note.vendorEntities)
+        await updateNotionNote(syncedNote)
+      }
+    }
+  })
+
+  bot.on(message('text'), async (context) => {
+    console.log('message(text):', JSON.stringify(context.update, null, 2))
+
+    if (context.message.reply_to_message) {
+      const originalMessage = context.message.reply_to_message
+      const notionNote = await findNotionNote([createTelegramMessageVendorEntity(originalMessage)])
+
+      if (notionNote) {
+        await updateNotionNote(telegramMessageToNote(context.message, notionNote.vendorEntities))
+        await bot.telegram.deleteMessage(originalMessage.chat.id, originalMessage.message_id)
+      } else {
+        await createNotionNote(telegramMessageToNote(context.message))
+      }
+    } else {
+      await createNotionNote(telegramMessageToNote(context.message))
+    }
+
+    await context.react({ type: 'emoji', emoji: '👀' })
+    setTimeout(async () => context.react(), 3000)
+  })
+
+  bot.on(editedMessage('text'), async (context) => {
+    console.log('editedMessage(text):', JSON.stringify(context.update, null, 2))
+
+    const note = telegramMessageToNote(context.editedMessage)
+
+    await setupNotionDatabase(databaseId)
+    const response = await notion.databases.query({
+      database_id: databaseId,
+      page_size: 1,
+      filter: serializeVendorEntitiesToNotionDatabaseQueryFilter(note.vendorEntities),
+    })
+
+    const pageId = response.results[0]?.id
+
+    if (!pageId) {
+      await createNotionNote(note)
+    } else {
+      await notion.pages.update({
+        page_id: pageId,
+        properties: serializeNoteToNotion(note),
+      })
+    }
+
+    console.log(pageId, response)
+
+    await context.react({ type: 'emoji', emoji: '👀' })
+    setTimeout(async () => context.react(), 3000)
+  })
+
+  bot.on('message_reaction', async (context) => {
+    console.log('message_reaction:', JSON.stringify(context.update, null, 2))
+
+    const reaction = context.messageReaction.new_reaction[0]
+    if (!reaction) return
+
+    if (reaction.type === 'emoji' && reaction.emoji === '💩') {
+      try {
+        await context.deleteMessage()
+      } catch (error) {
+        // message can no longer be deleted in Telegram chat
+      }
+    }
+  })
 
   const app = express()
   app.use(helmet({
@@ -171,7 +493,9 @@ async function start() {
   }
 
   logger.info({}, 'Starting telegram bot')
-  bot.launch().catch((err) => {
+  bot.launch({
+    allowedUpdates: ['message', 'edited_message', 'message_reaction', 'message_reaction_count', 'callback_query']
+  }).catch((err) => {
     logger.fatal({ err }, 'Could not launch telegram bot')
     process.exit(1)
   })

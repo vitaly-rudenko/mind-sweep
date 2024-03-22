@@ -47,6 +47,8 @@ const envSchema = z.object({
   WEB_APP_URL: urlSchema,
   WEB_APP_NAME: stringSchema,
   CORS_ORIGIN: urlArraySchema,
+  NOTION_TEST_INTEGRATION_SECRET: stringSchema,
+  NOTION_TEST_DATABASE_ID: stringSchema,
 })
 
 export const env = envSchema.parse(process.env)

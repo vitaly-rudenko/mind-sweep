@@ -38,6 +38,7 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
+    "@notionhq/client": "^2.2.14",
     "@vitalyrudenko/dependency-registry": "^2.0.0-beta.2",
     "cors": "^2.8.5",
     "express": "^4.18.3",
