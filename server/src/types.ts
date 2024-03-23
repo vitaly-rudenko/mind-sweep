@@ -3,7 +3,6 @@ export type TelegramMessageVendorEntity = {
   id: string
   hash: string
   metadata: {
-    version: number
     chatId: number
     messageId: number
     fromUserId: number
@@ -15,7 +14,6 @@ export type NotionPageVendorEntity = {
   id: string
   hash: string
   metadata: {
-    version: number
     databaseId: string
     pageId: string
   }

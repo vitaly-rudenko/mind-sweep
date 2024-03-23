@@ -4,6 +4,7 @@ import { message, editedMessage } from 'telegraf/filters'
 import type { VendorEntity, TelegramMessageVendorEntity, Note } from './types.js'
 import type { Message } from 'telegraf/types'
 import { createNoteHash } from './create-note-hash.js'
+import { logger } from './common/logger.js'
 
 export class TelegramProducer {
   constructor(
@@ -15,7 +16,7 @@ export class TelegramProducer {
     this.bot.command('sync', async (context) => {
       const notes = await this.database.getNotes()
 
-      console.log(notes)
+      logger.debug({ notes }, 'Syncing notes')
 
       for (const note of notes) {
         const syncedNoted = await this.syncNote(context.chat.id, note)
@@ -28,7 +29,7 @@ export class TelegramProducer {
     })
 
     this.bot.on(message('text'), async (context) => {
-      console.log('message(text):', JSON.stringify(context.update, null, 2))
+      logger.debug({ update: context.update }, 'New telegram text message')
 
       if (context.message.reply_to_message) {
         const originalMessage = context.message.reply_to_message
@@ -49,7 +50,7 @@ export class TelegramProducer {
     })
 
     this.bot.on(editedMessage('text'), async (context) => {
-      console.log('editedMessage(text):', JSON.stringify(context.update, null, 2))
+      logger.debug({ update: context.update }, 'Telegram text message has been edited')
 
       const existingNote = await this.database.getNote('telegram_message', this.createTelegramMessageVendorEntityId(context.editedMessage))
       const updatedNote = this.telegramMessageToNote(context.editedMessage, existingNote?.vendorEntities)
@@ -65,24 +66,28 @@ export class TelegramProducer {
     })
 
     this.bot.on('message_reaction', async (context) => {
-      console.log('message_reaction:', JSON.stringify(context.update, null, 2))
+      logger.debug({ update: context.update }, 'Reaction to telegram message has been updated')
 
-      const reaction = context.messageReaction.new_reaction[0]
-      if (!reaction) return
+      const newReaction = context.messageReaction.new_reaction[0]
+      const existingNote = await this.database.getNote('telegram_message', this.createTelegramMessageVendorEntityId(context.messageReaction))
+      if (!existingNote) return
 
-      if (reaction.type === 'emoji' && reaction.emoji === '💩') {
-        const existingNote = await this.database.getNote('telegram_message', this.createTelegramMessageVendorEntityId(context.messageReaction))
-
-        try {
-          await context.deleteMessage()
-        } catch {
-          console.log('Could not delete message')
-        }
-
-        if (existingNote) {
+      if (newReaction?.type === 'emoji') {
+        if (newReaction.emoji === '💯') {
+          await this.database.updateNote({ ...existingNote, status: 'done' })
+        } else if (newReaction.emoji === '✍') {
+          await this.database.updateNote({ ...existingNote, status: 'in_progress' })
+        } else if (newReaction.emoji === '💩') {
           await this.database.deleteNote(existingNote)
+          await context.deleteMessage()
+        } else if (newReaction.emoji === '🔥') {
+          await this.database.updateNote({ ...existingNote, tags: [...existingNote.tags, 'Today'] })
         }
+      } else if (!newReaction) {
+        await this.database.updateNote({ ...existingNote, tags: existingNote.tags.filter(tag => tag !== 'Today'), status: 'not_started' })
       }
+
+      await context.react()
     })
   }
 
@@ -101,13 +106,13 @@ export class TelegramProducer {
     if (note.status === 'to_delete') {
       try {
         await this.bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
-      } catch {
-        console.log('Could not delete message')
+      } catch (err) {
+        logger.warn({ err, note }, 'Could not delete message')
 
         try {
           await this.bot.telegram.setMessageReaction(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, [{ type: 'emoji', emoji: '💩' }])
-        } catch {
-          console.log('Could not set a message reaction')
+        } catch (err) {
+          logger.warn({ err, note }, 'Could not set a message reaction')
         }
       }
 
@@ -127,7 +132,7 @@ export class TelegramProducer {
     } catch {
       message = await this.bot.telegram.sendMessage(chatId, note.content)
       this.bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
-        .catch(() => console.log('Could not delete old message'))
+        .catch((err) => logger.warn({ err, telegramVendorEntity }, 'Could not delete old message'))
     }
 
     const syncedNote = this.telegramMessageToNote(message, note.vendorEntities)
@@ -137,7 +142,7 @@ export class TelegramProducer {
   }
 
   async syncNoteReactions(note: Note) {
-    console.log('Syncing note reaction:', note)
+    logger.debug({ note }, 'Syncing telegram reactions for note')
 
     const telegramVendorEntity = this.getTelegramMessageVendorEntity(note.vendorEntities)
     if (!telegramVendorEntity) return
@@ -150,10 +155,12 @@ export class TelegramProducer {
           ? [{ type: 'emoji', emoji: '💯' }]
           : note.status === 'in_progress'
             ? [{ type: 'emoji', emoji: '✍' }]
-            : undefined,
+            : note.tags.includes('Today')
+              ? [{ type: 'emoji', emoji: '🔥' }]
+              : undefined,
       )
-    } catch {
-      console.log('Could not set message reaction')
+    } catch (err) {
+      logger.warn({ err }, 'Could not set message reaction')
     }
   }
 
@@ -193,7 +200,6 @@ export class TelegramProducer {
       id: `${message.chat.id}_${message.message_id}`,
       hash: createNoteHash(message.text),
       metadata: {
-        version: 1,
         chatId: message.chat.id,
         messageId: message.message_id,
         fromUserId: message.from.id,

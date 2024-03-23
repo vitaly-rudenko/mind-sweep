@@ -171,7 +171,6 @@ export class NotionDatabase {
       id: `${databaseId}_${pageId}`,
       hash: createNoteHash(content),
       metadata: {
-        version: 1,
         databaseId,
         pageId,
       }
@@ -202,7 +201,11 @@ export class NotionDatabase {
       'Status': {
         type: 'select',
         select: {
-          name: 'Not started',
+          name: note.status === 'done'
+            ? 'Done'
+            : note.status === 'in_progress'
+              ? 'In progress'
+              : 'Not started',
         },
       },
       ...this.serializeVendorEntitiesToNotionProperties(note.vendorEntities)
