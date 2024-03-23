@@ -4,6 +4,7 @@ import pg from 'pg'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import crypto from 'crypto'
 import { Redis } from 'ioredis'
 import { logger } from './common/logger.js'
 import { env } from './env.js'
@@ -98,9 +99,11 @@ async function start() {
     type: 'telegram_message'
     id: string
     metadata: {
+      version: number
       chatId: number
       messageId: number
       fromUserId: number
+      hash: string
     }
   }
 
@@ -108,6 +111,7 @@ async function start() {
     type: 'notion_page'
     id: string
     metadata: {
+      version: number
       databaseId: string
       pageId: string
     }
@@ -119,9 +123,22 @@ async function start() {
     content: string
     tags: string[]
     vendorEntities: VendorEntity[]
+    status: 'not_started' | 'in_progress' | 'done' | 'to_delete'
+  }
+
+  function hashNoteContent(content: string) {
+    return crypto.createHash('md5').update(content).digest('hex')
+  }
+
+  function createTelegramMessageVendorEntityId(message: {
+    message_id: number
+    chat: { id: number }
+  }) {
+    return `${message.chat.id}_${message.message_id}`
   }
 
   function createTelegramMessageVendorEntity(message: {
+    text: string
     message_id: number
     chat: { id: number }
     from?: { id: number }
@@ -134,9 +151,11 @@ async function start() {
       type: 'telegram_message',
       id: `${message.chat.id}_${message.message_id}`,
       metadata: {
+        version: 1,
         chatId: message.chat.id,
         messageId: message.message_id,
         fromUserId: message.from.id,
+        hash: hashNoteContent(message.text),
       }
     }
   }
@@ -146,6 +165,7 @@ async function start() {
       type: 'notion_page',
       id: `${databaseId}_${pageId}`,
       metadata: {
+        version: 1,
         databaseId,
         pageId,
       }
@@ -169,6 +189,7 @@ async function start() {
     return {
       content,
       tags,
+      status: 'not_started',
       vendorEntities: [
         ...vendorEntities.filter(entity => entity.type !== 'telegram_message'),
         createTelegramMessageVendorEntity(message),
@@ -215,6 +236,12 @@ async function start() {
         type: 'multi_select',
         multi_select: note.tags.map((tag) => ({ name: tag })),
       },
+      'Status': {
+        type: 'select',
+        select: {
+          name: 'Not started',
+        },
+      },
       ...serializeVendorEntityToNotionProperties(note.vendorEntities),
     }
   }
@@ -240,6 +267,17 @@ async function start() {
           type: 'multi_select',
           multi_select: {},
         },
+        'Status': {
+          type: 'select',
+          select: {
+            options: [
+              { name: 'Not started' },
+              { name: 'In progress' },
+              { name: 'Done' },
+              { name: 'To delete' },
+            ]
+          },
+        },
         'entity:telegram_message': {
           type: 'rich_text',
           rich_text: {},
@@ -247,6 +285,8 @@ async function start() {
       }
     })
   }
+
+  await setupNotionDatabase(databaseId)
 
   async function createNotionNote(note: Note) {
     await setupNotionDatabase(databaseId)
@@ -271,11 +311,26 @@ async function start() {
     })
   }
 
-  async function findNotionNote(vendorEntities: VendorEntity[]) {
+  async function deleteNotionNote(note: Note) {
+    const notionPageVendorEntity = getNotionPageVendorEntity(note.vendorEntities)
+    if (!notionPageVendorEntity) throw new Error('Unsupported vendor entity type')
+
+    await notion.pages.update({
+      page_id: notionPageVendorEntity.metadata.pageId,
+      archived: true,
+    })
+  }
+
+  async function findNotionNote(vendorEntityType: VendorEntity['type'], vendorEntityId: VendorEntity['id']) {
     const response = await notion.databases.query({
       database_id: databaseId,
       page_size: 1,
-      filter: serializeVendorEntitiesToNotionDatabaseQueryFilter(vendorEntities),
+      filter: {
+        property: `entity:${vendorEntityType}`,
+        rich_text: {
+          starts_with: `${vendorEntityId}:`,
+        },
+      }
     })
 
     return parseNotionQueryDatabaseResponse(response).at(0)
@@ -289,17 +344,28 @@ async function start() {
 
       const nameProperty = page.properties['Name']
       const tagsProperty = page.properties['Tags']
+      const statusProperty = page.properties['Status']
       const entityProperties: [string, PageObjectResponse['properties'][number]][] = Object
         .entries(page.properties)
         .filter(([name]) => name.startsWith('entity:'))
 
       if (!('title' in nameProperty)) continue
       if (!('multi_select' in tagsProperty) || !Array.isArray(tagsProperty.multi_select)) continue
+      if (!('select' in statusProperty) || !statusProperty.select || 'options' in statusProperty.select) continue
 
       const content = nameProperty.title.at(0)?.plain_text
       if (!content) continue
 
       const tags = tagsProperty.multi_select.map((tag) => tag.name)
+      const status = statusProperty.select.name === 'Not started'
+        ? 'not_started'
+        : statusProperty.select.name === 'In progress'
+          ? 'in_progress'
+          : statusProperty.select.name === 'Done'
+            ? 'done'
+            : statusProperty.select.name === 'To delete'
+              ? 'to_delete'
+              : 'not_started'
 
       const vendorEntities: VendorEntity[] = [createNotionPageVendorEntity(databaseId, page.id)]
       for (const [name, property] of entityProperties) {
@@ -318,7 +384,12 @@ async function start() {
         })
       }
 
-      notes.push({ content, tags, vendorEntities })
+      notes.push({
+        content,
+        tags,
+        vendorEntities,
+        status,
+      })
     }
 
     return notes
@@ -335,13 +406,40 @@ async function start() {
       const telegramVendorEntity = getTelegramVendorEntity(note.vendorEntities)
 
       if (telegramVendorEntity) {
-        await bot.telegram.editMessageText(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, undefined, note.content)
+        if (note.status === 'to_delete') {
+          try {
+            await bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
+          } catch {
+            console.log('Could not delete message')
+
+            try {
+              await bot.telegram.setMessageReaction(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, [{ type: 'emoji', emoji: '💩' }])
+            } catch {
+              console.log('Could not set a message reaction')
+            }
+          }
+
+          await deleteNotionNote(note)
+        } else {
+          if (telegramVendorEntity.metadata.hash !== hashNoteContent(note.content)) {
+            try {
+              await bot.telegram.editMessageText(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, undefined, note.content)
+            } catch {
+              const message = await bot.telegram.sendMessage(context.chat.id, note.content)
+              const syncedNote = telegramMessageToNote(message, note.vendorEntities)
+              await updateNotionNote(syncedNote)
+              await bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
+            }
+          }
+        }
       } else {
         const message = await bot.telegram.sendMessage(context.chat.id, note.content)
         const syncedNote = telegramMessageToNote(message, note.vendorEntities)
         await updateNotionNote(syncedNote)
       }
     }
+
+    await context.deleteMessage()
   })
 
   bot.on(message('text'), async (context) => {
@@ -349,7 +447,7 @@ async function start() {
 
     if (context.message.reply_to_message) {
       const originalMessage = context.message.reply_to_message
-      const notionNote = await findNotionNote([createTelegramMessageVendorEntity(originalMessage)])
+      const notionNote = await findNotionNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
 
       if (notionNote) {
         await updateNotionNote(telegramMessageToNote(context.message, notionNote.vendorEntities))
@@ -401,10 +499,16 @@ async function start() {
     if (!reaction) return
 
     if (reaction.type === 'emoji' && reaction.emoji === '💩') {
+      const notionNote = await findNotionNote('telegram_message', createTelegramMessageVendorEntityId(context.messageReaction))
+
       try {
         await context.deleteMessage()
-      } catch (error) {
-        // message can no longer be deleted in Telegram chat
+      } catch {
+        console.log('Could not delete message')
+      }
+
+      if (notionNote) {
+        await deleteNotionNote(notionNote)
       }
     }
   })
