@@ -146,8 +146,6 @@ export class NotionDatabase {
 
         const [, id, metadata, hash] = match
 
-        console.log(serialized, match)
-
         vendorEntities.push({
           type,
           id,

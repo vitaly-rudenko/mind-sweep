@@ -15,8 +15,13 @@ export class TelegramProducer {
     this.bot.command('sync', async (context) => {
       const notes = await this.database.getNotes()
 
+      console.log(notes)
+
       for (const note of notes) {
-        await this.syncNote(context.chat.id, note)
+        const syncedNoted = await this.syncNote(context.chat.id, note)
+        if (syncedNoted) {
+          await this.syncNoteReactions(syncedNoted)
+        }
       }
 
       await context.deleteMessage()
@@ -87,8 +92,9 @@ export class TelegramProducer {
     // New note
     if (!telegramVendorEntity) {
       const message = await this.bot.telegram.sendMessage(chatId, note.content)
-      await this.database.updateNote(this.telegramMessageToNote(message, note.vendorEntities))
-      return
+      const syncedNote = this.telegramMessageToNote(message, note.vendorEntities)
+      await this.database.updateNote(syncedNote)
+      return syncedNote
     }
 
     // Deleted note
@@ -106,11 +112,14 @@ export class TelegramProducer {
       }
 
       await this.database.deleteNote(note)
-      return
+      return undefined
     }
 
     // Updated note
-    if (telegramVendorEntity.hash === createNoteHash(note.content)) return
+    if (telegramVendorEntity.hash === createNoteHash(note.content)) {
+      return note
+    }
+
     let message
     try {
       message = await this.bot.telegram.editMessageText(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId, undefined, note.content)
@@ -121,7 +130,31 @@ export class TelegramProducer {
         .catch(() => console.log('Could not delete old message'))
     }
 
-    await this.database.updateNote(this.telegramMessageToNote(message, note.vendorEntities))
+    const syncedNote = this.telegramMessageToNote(message, note.vendorEntities)
+    await this.database.updateNote(syncedNote)
+
+    return syncedNote
+  }
+
+  async syncNoteReactions(note: Note) {
+    console.log('Syncing note reaction:', note)
+
+    const telegramVendorEntity = this.getTelegramMessageVendorEntity(note.vendorEntities)
+    if (!telegramVendorEntity) return
+
+    try {
+      await this.bot.telegram.setMessageReaction(
+        telegramVendorEntity.metadata.chatId,
+        telegramVendorEntity.metadata.messageId,
+        note.status === 'done'
+          ? [{ type: 'emoji', emoji: '💯' }]
+          : note.status === 'in_progress'
+            ? [{ type: 'emoji', emoji: '✍' }]
+            : undefined,
+      )
+    } catch {
+      console.log('Could not set message reaction')
+    }
   }
 
   private getTelegramMessageVendorEntity(vendorEntities: VendorEntity[]) {
