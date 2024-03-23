@@ -14,16 +14,7 @@ export class TelegramProducer {
 
   produce() {
     this.bot.command('sync', async (context) => {
-      const notes = await this.database.getNotes()
-
-      logger.debug({ notes }, 'Syncing notes')
-
-      for (const note of notes) {
-        const syncedNoted = await this.syncNote(context.chat.id, note)
-        if (syncedNoted) {
-          await this.syncNoteReactions(syncedNoted)
-        }
-      }
+      await this.syncNotes(context.chat.id)
 
       await context.deleteMessage()
     })
@@ -72,23 +63,42 @@ export class TelegramProducer {
       const existingNote = await this.database.getNote('telegram_message', this.createTelegramMessageVendorEntityId(context.messageReaction))
       if (!existingNote) return
 
+      let updatedNote: Note | undefined
       if (newReaction?.type === 'emoji') {
-        if (newReaction.emoji === '💯') {
-          await this.database.updateNote({ ...existingNote, status: 'done' })
-        } else if (newReaction.emoji === '✍') {
-          await this.database.updateNote({ ...existingNote, status: 'in_progress' })
-        } else if (newReaction.emoji === '💩') {
+        // Special emojis for deleting note
+        if (newReaction.emoji === '💩') {
           await this.database.deleteNote(existingNote)
           await context.deleteMessage()
-        } else if (newReaction.emoji === '🔥') {
-          await this.database.updateNote({ ...existingNote, tags: [...existingNote.tags, 'Today'] })
+          return
+        }
+
+        // Emojis for setting note status
+        if (newReaction.emoji === '💯') {
+          updatedNote = { ...existingNote, status: 'done' }
+        } else if (newReaction.emoji === '✍') {
+          updatedNote = { ...existingNote, status: 'in_progress' }
         }
       } else if (!newReaction) {
-        await this.database.updateNote({ ...existingNote, tags: existingNote.tags.filter(tag => tag !== 'Today'), status: 'not_started' })
+        updatedNote = { ...existingNote, status: 'not_started' }
       }
 
-      await context.react()
+      if (updatedNote) {
+        await this.database.updateNote(updatedNote)
+        await this.syncNoteReactions(updatedNote)
+      }
     })
+  }
+
+  async syncNotes(chatId: number) {
+    const notes = await this.database.getNotes()
+    logger.debug({ notes }, 'Syncing notes')
+
+    for (const note of notes) {
+      const syncedNoted = await this.syncNote(chatId, note)
+      if (syncedNoted) {
+        await this.syncNoteReactions(syncedNoted)
+      }
+    }
   }
 
   async syncNote(chatId: number, note: Note) {
@@ -155,9 +165,7 @@ export class TelegramProducer {
           ? [{ type: 'emoji', emoji: '💯' }]
           : note.status === 'in_progress'
             ? [{ type: 'emoji', emoji: '✍' }]
-            : note.tags.includes('Today')
-              ? [{ type: 'emoji', emoji: '🔥' }]
-              : undefined,
+            : undefined,
       )
     } catch (err) {
       logger.warn({ err }, 'Could not set message reaction')
