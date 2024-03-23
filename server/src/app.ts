@@ -103,6 +103,11 @@ async function start() {
 
   telegramProducer.produce()
 
+  setInterval(async () => {
+    logger.info({}, 'Syncing notes')
+    await telegramProducer.syncNotes(env.TELEGRAM_TEST_CHAT_ID)
+  }, 60_000)
+
   const app = express()
   app.use(helmet({
     crossOriginResourcePolicy: {

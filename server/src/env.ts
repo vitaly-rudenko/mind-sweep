@@ -49,6 +49,7 @@ const envSchema = z.object({
   CORS_ORIGIN: urlArraySchema,
   NOTION_TEST_INTEGRATION_SECRET: stringSchema,
   NOTION_TEST_DATABASE_ID: stringSchema,
+  TELEGRAM_TEST_CHAT_ID: numberSchema,
 })
 
 export const env = envSchema.parse(process.env)
