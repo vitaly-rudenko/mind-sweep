@@ -4,7 +4,13 @@ import type { Note, Bucket } from '../types.js'
 import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
-import { extractTagsFromMessage, noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
+import { noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
+
+const experimentalEmojiTags = [
+  { emoji: '🔥', tag: 'Today' },
+  { emoji: '⚡',  tag: 'Urgent' },
+  { emoji: '❤', tag: 'Important' },
+]
 
 export class TelegramProducer {
   constructor(
@@ -69,6 +75,7 @@ export class TelegramProducer {
     this.bot.on('message_reaction', async (context) => {
       logger.debug({ update: context.update }, 'Reaction to telegram message has been changed')
 
+      const oldReaction = context.messageReaction.old_reaction[0]
       const newReaction = context.messageReaction.new_reaction[0]
 
       let existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.messageReaction))
@@ -104,12 +111,27 @@ export class TelegramProducer {
         } else if (newReaction.emoji === '✍') {
           updatedNote = { ...existingNote, status: 'in_progress' }
         }
+
+        const experimentalEmojiTag = experimentalEmojiTags.find(tag => tag.emoji === newReaction.emoji)
+        if (experimentalEmojiTag) {
+          updatedNote = { ...existingNote, tags: [...existingNote.tags.filter(tag => experimentalEmojiTags.every(t => t.tag !== tag)), experimentalEmojiTag.tag] }
+        }
       } else if (!newReaction) {
-        updatedNote = { ...existingNote, status: 'not_started' }
+        if (oldReaction.type === 'emoji' && ['💯', '✍'].includes(oldReaction.emoji)) {
+          updatedNote = { ...existingNote, status: 'not_started' }
+        }
+
+        if (oldReaction.type === 'emoji') {
+          const experimentalEmojiTag = experimentalEmojiTags.find(tag => tag.emoji === oldReaction.emoji)
+          if (experimentalEmojiTag) {
+            updatedNote = { ...existingNote, tags: existingNote.tags.filter(tag => tag !== experimentalEmojiTag.tag) }
+          }
+        }
       }
 
       if (updatedNote) {
-        await this.bucket.storeNote(updatedNote)
+        const storedNote = await this.bucket.storeNote(updatedNote)
+        await this.syncNote(context.chat.id, storedNote)
         await this.syncNoteReactions(updatedNote)
       }
     })
