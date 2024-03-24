@@ -5,6 +5,7 @@ import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
 import { noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
+import type { Message } from 'telegraf/types'
 
 const experimentalEmojiTags = [
   { emoji: '🔥', tag: 'Today' },
@@ -41,11 +42,12 @@ export class TelegramProducer {
             vendorEntities: mergeVendorEntities(originalNote.vendorEntities, createTelegramMessageVendorEntity(context.message)),
           })
           await this.syncNoteReactions(storedNote)
-          await this.bot.telegram.deleteMessage(originalMessage.chat.id, originalMessage.message_id)
         } else {
           await this.bucket.storeNote(telegramMessageToNote(context.message))
           await this.reactToNewMessage(context)
         }
+
+        await this.bot.telegram.deleteMessage(originalMessage.chat.id, originalMessage.message_id)
       } else {
         await this.bucket.storeNote(telegramMessageToNote(context.message))
         await this.reactToNewMessage(context)
@@ -79,6 +81,7 @@ export class TelegramProducer {
       const newReaction = context.messageReaction.new_reaction[0]
 
       let existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.messageReaction))
+      let keepOriginalMessage = !existingNote
       if (!existingNote) {
         // Create a "recovery" note in the bucket
         existingNote = await this.bucket.storeNote({
@@ -131,8 +134,10 @@ export class TelegramProducer {
 
       if (updatedNote) {
         const storedNote = await this.bucket.storeNote(updatedNote)
-        await this.syncNote(context.chat.id, storedNote)
-        await this.syncNoteReactions(updatedNote)
+        const syncedNote = await this.syncNote(context.chat.id, storedNote, { keepOriginalMessage })
+        if (syncedNote) {
+          await this.syncNoteReactions(syncedNote)
+        }
       }
     })
   }
@@ -164,7 +169,7 @@ export class TelegramProducer {
     }
   }
 
-  async syncNote(chatId: number, note: Note) {
+  async syncNote(chatId: number, note: Note, options?: { keepOriginalMessage?: boolean }) {
     logger.debug({ note }, 'Syncing telegram message for note')
 
     const telegramVendorEntity = getVendorEntity(note.vendorEntities, 'telegram_message')
@@ -211,13 +216,20 @@ export class TelegramProducer {
       if (message === true) throw new Error('Message was not edited')
     } catch (err) {
       logger.warn({ err, note }, 'Could not edit message for the updated note, sending a new message instead')
+      message = await this.bot.telegram.sendMessage(
+        chatId,
+        messageText,
+        options?.keepOriginalMessage
+          ? { reply_parameters: { chat_id: telegramVendorEntity.metadata.chatId, message_id: telegramVendorEntity.metadata.messageId } }
+          : undefined
+      )
 
-      message = await this.bot.telegram.sendMessage(chatId, messageText)
-
-      try {
-        await this.bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
-      } catch (err) {
-        logger.warn({ err, telegramVendorEntity }, 'Could not delete old message for the updated note')
+      if (!options?.keepOriginalMessage) {
+        try {
+          await this.bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
+        } catch (err) {
+          logger.warn({ err, telegramVendorEntity }, 'Could not delete old message for the updated note')
+        }
       }
     }
 
