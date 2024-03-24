@@ -4,7 +4,7 @@ import type { Note, Bucket } from '../types.js'
 import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
-import { extractTagsFromMessage, noteToTelegramMessageText, telegramMessageToNote } from './notes.js'
+import { extractTagsFromMessage, noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
 
 export class TelegramProducer {
   constructor(
@@ -21,15 +21,17 @@ export class TelegramProducer {
     this.bot.on(message('text'), async (context) => {
       logger.debug({ update: context.update }, 'Received a new telegram text message')
 
+      const { content, tags } = parseTelegramMessage(context.message)
+
       if (context.message.reply_to_message) {
         const originalMessage = context.message.reply_to_message
         const originalNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
 
         if (originalNote) {
           const storedNote = await this.bucket.storeNote({
-            content: context.message.text,
+            content,
+            tags,
             status: originalNote.status,
-            tags: extractTagsFromMessage(context.message),
             vendorEntities: mergeVendorEntities(originalNote.vendorEntities, createTelegramMessageVendorEntity(context.message)),
           })
           await this.syncNoteReactions(storedNote)
@@ -47,13 +49,14 @@ export class TelegramProducer {
     this.bot.on(editedMessage('text'), async (context) => {
       logger.debug({ update: context.update }, 'Telegram text message has been edited')
 
-      const existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.editedMessage))
+      const { content, tags } = parseTelegramMessage(context.editedMessage)
 
+      const existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.editedMessage))
       if (existingNote) {
         await this.bucket.storeNote({
-          content: context.editedMessage.text,
+          content,
+          tags,
           status: existingNote.status,
-          tags: extractTagsFromMessage(context.editedMessage),
           vendorEntities: mergeVendorEntities(existingNote.vendorEntities, createTelegramMessageVendorEntity(context.editedMessage)),
         })
         await this.syncNoteReactions(existingNote)
