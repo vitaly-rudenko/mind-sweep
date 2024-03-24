@@ -1,6 +1,6 @@
 import type { Client } from '@notionhq/client'
 import type { Note, VendorEntity } from '../types.js'
-import type { QueryDatabaseResponse, PageObjectResponse } from '@notionhq/client/build/src/api-endpoints.js'
+import type { QueryDatabaseResponse, PageObjectResponse, DatabaseObjectResponse, PartialDatabaseObjectResponse, PartialPageObjectResponse } from '@notionhq/client/build/src/api-endpoints.js'
 import { createNotionPageVendorEntity } from './vendor-entity.js'
 import { logger } from '../common/logger.js'
 
@@ -69,29 +69,32 @@ export function notionPagesToNotes(databaseId: string, pages: QueryDatabaseRespo
       .entries(page.properties)
       .filter(([name]) => name.startsWith('entity:'))
 
-    if (!('title' in nameProperty)) continue
-    if (!('multi_select' in tagsProperty) || !Array.isArray(tagsProperty.multi_select)) continue
-    if (!('select' in statusProperty) || (statusProperty.select && 'options' in statusProperty.select)) continue
+    const content = isValidNameProperty(nameProperty)
+      ? nameProperty.title.at(0)?.plain_text ?? ''
+      : ''
 
-    const content = nameProperty.title.at(0)?.plain_text ?? ''
+    const tags = isValidTagsProperty(tagsProperty)
+      ? tagsProperty.multi_select.map((tag) => tag.name)
+      : []
 
-    const tags = tagsProperty.multi_select.map((tag) => tag.name)
-    const status = statusProperty.select?.name === 'In progress'
-      ? 'in_progress'
-      : statusProperty.select?.name === 'Done'
-        ? 'done'
-        : statusProperty.select?.name === 'To delete'
-          ? 'to_delete'
-          : 'not_started'
+    const status = isValidStatusProperty(statusProperty)
+      ? statusProperty.select?.name === 'In progress'
+        ? 'in_progress'
+        : statusProperty.select?.name === 'Done'
+          ? 'done'
+          : statusProperty.select?.name === 'To delete'
+            ? 'to_delete'
+            : 'not_started'
+      : 'not_started'
 
     const vendorEntities: VendorEntity[] = [createNotionPageVendorEntity(databaseId, page)]
     for (const [name, property] of entityProperties) {
-      if (!('rich_text' in property)) continue
+      if (!isValidVendorEntityProperty(property)) continue
 
       const type = name.slice('entity:'.length)
       if (type !== 'telegram_message') continue
 
-      const serialized = property.rich_text[0]?.plain_text
+      const serialized = property.rich_text.at(0)?.plain_text
       if (!serialized) continue
 
       const match = serialized.match(SERIALIZED_VENDOR_ENTITY_REGEX)
@@ -116,4 +119,21 @@ export function notionPagesToNotes(databaseId: string, pages: QueryDatabaseRespo
   }
 
   return notes
+}
+type Property = (PageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse)['properties'][string]
+
+function isValidNameProperty(property?: Property): property is Extract<Property, { type: 'title' }> {
+  return Boolean(property && 'title' in property)
+}
+
+function isValidTagsProperty(property?: Property): property is Extract<Property, { type: 'multi_select'; multi_select: unknown[] }> {
+  return Boolean(property && 'multi_select' in property && Array.isArray(property.multi_select))
+}
+
+function isValidStatusProperty(property?: Property): property is Extract<Property, { type: 'select'; select: null | { name: string } }> {
+  return Boolean(property && 'select' in property && (!property.select || !('options' in property.select)))
+}
+
+function isValidVendorEntityProperty(property?: Property): property is Extract<Property, { type: 'rich_text' }> {
+  return Boolean(property && 'rich_text' in property)
 }
