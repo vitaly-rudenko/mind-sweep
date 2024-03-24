@@ -23,8 +23,8 @@ import { Client } from '@notionhq/client'
 import type { Message } from 'telegraf/types'
 import type { PageObjectResponse, QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints.js'
 import type { TelegramMessageVendorEntity, NotionPageVendorEntity, VendorEntity, Note } from './types.js'
-import { NotionDatabase } from './NotionDatabase.js'
-import { TelegramProducer } from './TelegramProducer.js'
+import { NotionBucket } from './notion/notion-bucket.js'
+import { TelegramProducer } from './telegram/telegram-producer.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -98,19 +98,10 @@ async function start() {
   const databaseId = env.NOTION_TEST_DATABASE_ID
   const notion = new Client({ auth: env.NOTION_TEST_INTEGRATION_SECRET })
 
-  const notionDatabase = new NotionDatabase(notion, databaseId)
-  const telegramProducer = new TelegramProducer(bot, notionDatabase)
+  const notionBucket = new NotionBucket(notion, databaseId)
+  const telegramProducer = new TelegramProducer(bot, notionBucket)
 
   telegramProducer.produce()
-
-  setInterval(async () => {
-    try {
-      logger.info({}, 'Syncing notes')
-      await telegramProducer.syncNotes(env.TELEGRAM_TEST_CHAT_ID)
-    } catch (err) {
-      logger.warn({ err }, 'Could not sync notes')
-    }
-  }, 60_000)
 
   const app = express()
   app.use(helmet({
@@ -197,7 +188,7 @@ async function start() {
 
   logger.info({}, 'Starting telegram bot')
   bot.launch({
-    allowedUpdates: ['message', 'edited_message', 'message_reaction', 'message_reaction_count', 'callback_query']
+    allowedUpdates: ['message', 'edited_message', 'message_reaction', 'callback_query']
   }).catch((err) => {
     logger.fatal({ err }, 'Could not launch telegram bot')
     process.exit(1)
