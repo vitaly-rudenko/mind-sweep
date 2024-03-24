@@ -1,7 +1,6 @@
 import type { Context, Telegraf } from 'telegraf'
 import { message, editedMessage } from 'telegraf/filters'
-import type { VendorEntity, Note, Bucket } from '../types.js'
-import type { Message } from 'telegraf/types'
+import type { Note, Bucket } from '../types.js'
 import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
