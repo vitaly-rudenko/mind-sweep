@@ -107,10 +107,10 @@ export class NotionBucket implements Bucket {
         type: 'select',
         select: {
           options: [
-            { name: 'Not started' },
-            { name: 'In progress' },
-            { name: 'Done' },
-            { name: 'To delete' },
+            { name: 'Not started', color: 'gray' },
+            { name: 'In progress', color: 'yellow' },
+            { name: 'Done', color: 'green' },
+            { name: 'To delete', color: 'red' },
           ]
         },
       }
