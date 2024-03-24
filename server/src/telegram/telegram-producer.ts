@@ -26,21 +26,22 @@ export class TelegramProducer {
         const originalNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
 
         if (originalNote) {
-          await this.bucket.storeNote({
+          const storedNote = await this.bucket.storeNote({
             content: context.message.text,
             status: originalNote.status,
             tags: extractTagsFromMessage(context.message),
             vendorEntities: mergeVendorEntities(originalNote.vendorEntities, createTelegramMessageVendorEntity(context.message)),
           })
+          await this.syncNoteReactions(storedNote)
           await this.bot.telegram.deleteMessage(originalMessage.chat.id, originalMessage.message_id)
         } else {
           await this.bucket.storeNote(telegramMessageToNote(context.message))
+          await this.reactToNewMessage(context)
         }
       } else {
         await this.bucket.storeNote(telegramMessageToNote(context.message))
+        await this.reactToNewMessage(context)
       }
-
-      await this.reactToNewMessage(context)
     })
 
     this.bot.on(editedMessage('text'), async (context) => {
@@ -55,6 +56,7 @@ export class TelegramProducer {
           tags: extractTagsFromMessage(context.editedMessage),
           vendorEntities: mergeVendorEntities(existingNote.vendorEntities, createTelegramMessageVendorEntity(context.editedMessage)),
         })
+        await this.syncNoteReactions(existingNote)
       } else {
         await this.bucket.storeNote(telegramMessageToNote(context.editedMessage))
         await this.reactToNewMessage(context)
