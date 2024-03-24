@@ -172,10 +172,12 @@ export class TelegramProducer {
     }
   }
 
+  /** @deprecated Create a universal utility for this. */
   private getTelegramMessageVendorEntity(vendorEntities: VendorEntity[]) {
     return vendorEntities.find((entity): entity is TelegramMessageVendorEntity => entity.type === 'telegram_message')
   }
 
+  /** @deprecated Implement a merge() tool or something like that instead of this. */
   private telegramMessageToNote(message: Message.TextMessage, vendorEntities: VendorEntity[] = []): Note {
     const content = message.text
     const tags = (message.entities ?? [])
@@ -218,4 +220,7 @@ export class TelegramProducer {
   private createTelegramMessageVendorEntityId(message: { chat: { id: number }; message_id: number }): string {
     return `${message.chat.id}_${message.message_id}`
   }
+
+  // TODO: implement noteToTelegramMessageText(note: { content: string; tags: string[] }): string
+  // TODO: implement telegramMessageTextToNote(messageText: string): { content: string; tags: string[] }
 }

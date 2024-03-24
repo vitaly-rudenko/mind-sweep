@@ -104,8 +104,12 @@ async function start() {
   telegramProducer.produce()
 
   setInterval(async () => {
-    logger.info({}, 'Syncing notes')
-    await telegramProducer.syncNotes(env.TELEGRAM_TEST_CHAT_ID)
+    try {
+      logger.info({}, 'Syncing notes')
+      await telegramProducer.syncNotes(env.TELEGRAM_TEST_CHAT_ID)
+    } catch (err) {
+      logger.warn({ err }, 'Could not sync notes')
+    }
   }, 60_000)
 
   const app = express()
