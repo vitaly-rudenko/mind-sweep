@@ -5,7 +5,7 @@ import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
 import { noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
-import type { Message } from 'telegraf/types'
+import type { Message, MessageReactionUpdated } from 'telegraf/types'
 
 const experimentalEmojiTags = [
   { emoji: '🔥', tag: 'Today' },
@@ -19,6 +19,146 @@ export class TelegramProducer {
     private readonly bucket: Bucket,
   ) {}
 
+  async $updateNote(note: Note) {
+    await this.bucket.storeNote(note)
+    await this.$syncNoteReactions(note)
+  }
+
+  async $createNote(note: Note) {
+    await this.bucket.storeNote(note)
+    await this.$syncNoteReactions(note)
+  }
+
+  async $syncNoteReactions(note: Note) {
+    logger.debug({ note }, 'Syncing telegram reactions for note')
+
+    const telegramVendorEntity = getVendorEntity(note.vendorEntities, 'telegram_message')
+    if (!telegramVendorEntity) return
+
+    try {
+      await this.bot.telegram.setMessageReaction(
+        telegramVendorEntity.metadata.chatId,
+        telegramVendorEntity.metadata.messageId,
+        note.status === 'done'
+          ? [{ type: 'emoji', emoji: '💯' }]
+          : note.status === 'in_progress'
+            ? [{ type: 'emoji', emoji: '✍' }]
+            : undefined,
+      )
+    } catch (err) {
+      logger.warn({ err, note }, 'Could not change message reaction')
+    }
+  }
+
+  async $deleteTelegramMessage(message: NonNullable<Message.TextMessage['reply_to_message']>) {
+    await this.bot.telegram.deleteMessage(message.chat.id, message.message_id)
+  }
+
+  async $onNewTelegramTextMessage(message: Message.TextMessage) {
+    const { content, tags } = parseTelegramMessage(message)
+
+    if (message.reply_to_message) {
+      const originalMessage = message.reply_to_message
+      const originalNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
+
+      if (originalNote) {
+        await this.$updateNote({
+          content,
+          tags,
+          status: originalNote.status,
+          vendorEntities: mergeVendorEntities(originalNote.vendorEntities, createTelegramMessageVendorEntity(message)),
+        })
+      } else {
+        await this.$createNote(telegramMessageToNote(message))
+      }
+
+      await this.$deleteTelegramMessage(originalMessage)
+    } else {
+      await this.$createNote(telegramMessageToNote(message))
+    }
+  }
+
+  async $onEditedTelegramTextMessage(message: Message.TextMessage) {
+    const { content, tags } = parseTelegramMessage(message)
+
+    const existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(message))
+    if (existingNote) {
+      await this.$updateNote({
+        content,
+        tags,
+        status: existingNote.status,
+        vendorEntities: mergeVendorEntities(existingNote.vendorEntities, createTelegramMessageVendorEntity(message)),
+      })
+    } else {
+      await this.$createNote(telegramMessageToNote(message))
+    }
+  }
+
+  async $onTelegramMessageReaction(messageReaction: MessageReactionUpdated) {
+    const oldReaction = messageReaction.old_reaction[0]
+    const newReaction = messageReaction.new_reaction[0]
+
+    let existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(messageReaction))
+    let keepOriginalMessage = !existingNote
+    if (!existingNote) {
+      // Create a "recovery" note in the bucket
+      existingNote = await this.bucket.storeNote({
+        content: '',
+        status: 'not_started',
+        tags: [],
+        vendorEntities: [createTelegramMessageVendorEntity({
+          text: '',
+          chat: { id: messageReaction.chat.id },
+          message_id: messageReaction.message_id,
+          ...messageReaction.user && {
+            from: { id: messageReaction.user.id }
+          },
+        })],
+      })
+    }
+
+    let updatedNote: Note | undefined
+    if (newReaction?.type === 'emoji') {
+      // Special emojis for deleting note
+      if (newReaction.emoji === '💩') {
+        await this.bucket.deleteNote(existingNote)
+        await this.bot.telegram.deleteMessage(messageReaction.chat.id, messageReaction.message_id)
+        return
+      }
+
+      // Emojis for setting note status
+      if (newReaction.emoji === '💯') {
+        updatedNote = { ...existingNote, status: 'done' }
+      } else if (newReaction.emoji === '✍') {
+        updatedNote = { ...existingNote, status: 'in_progress' }
+      }
+
+      const experimentalEmojiTag = experimentalEmojiTags.find(tag => tag.emoji === newReaction.emoji)
+      if (experimentalEmojiTag) {
+        updatedNote = { ...existingNote, tags: [...existingNote.tags.filter(tag => experimentalEmojiTags.every(t => t.tag !== tag)), experimentalEmojiTag.tag] }
+      }
+    } else if (!newReaction) {
+      if (oldReaction.type === 'emoji' && ['💯', '✍'].includes(oldReaction.emoji)) {
+        updatedNote = { ...existingNote, status: 'not_started' }
+      }
+
+      if (oldReaction.type === 'emoji') {
+        const experimentalEmojiTag = experimentalEmojiTags.find(tag => tag.emoji === oldReaction.emoji)
+        if (experimentalEmojiTag) {
+          updatedNote = { ...existingNote, tags: existingNote.tags.filter(tag => tag !== experimentalEmojiTag.tag) }
+        }
+      }
+    }
+
+    if (updatedNote) {
+      const storedNote = await this.bucket.storeNote(updatedNote)
+      const syncedNote = await this.syncNote(messageReaction.chat.id, storedNote, { keepOriginalMessage })
+      if (syncedNote) {
+        await this.$syncNoteReactions(syncedNote)
+      }
+    }
+  }
+
   produce() {
     this.bot.command('sync', async (context) => {
       await this.syncNotes(context.chat.id)
@@ -27,51 +167,12 @@ export class TelegramProducer {
 
     this.bot.on(message('text'), async (context) => {
       logger.debug({ update: context.update }, 'Received a new telegram text message')
-
-      const { content, tags } = parseTelegramMessage(context.message)
-
-      if (context.message.reply_to_message) {
-        const originalMessage = context.message.reply_to_message
-        const originalNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
-
-        if (originalNote) {
-          const storedNote = await this.bucket.storeNote({
-            content,
-            tags,
-            status: originalNote.status,
-            vendorEntities: mergeVendorEntities(originalNote.vendorEntities, createTelegramMessageVendorEntity(context.message)),
-          })
-          await this.syncNoteReactions(storedNote)
-        } else {
-          await this.bucket.storeNote(telegramMessageToNote(context.message))
-          await this.reactToNewMessage(context)
-        }
-
-        await this.bot.telegram.deleteMessage(originalMessage.chat.id, originalMessage.message_id)
-      } else {
-        await this.bucket.storeNote(telegramMessageToNote(context.message))
-        await this.reactToNewMessage(context)
-      }
+      await this.$onNewTelegramTextMessage(context.message)
     })
 
     this.bot.on(editedMessage('text'), async (context) => {
       logger.debug({ update: context.update }, 'Telegram text message has been edited')
-
-      const { content, tags } = parseTelegramMessage(context.editedMessage)
-
-      const existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.editedMessage))
-      if (existingNote) {
-        await this.bucket.storeNote({
-          content,
-          tags,
-          status: existingNote.status,
-          vendorEntities: mergeVendorEntities(existingNote.vendorEntities, createTelegramMessageVendorEntity(context.editedMessage)),
-        })
-        await this.syncNoteReactions(existingNote)
-      } else {
-        await this.bucket.storeNote(telegramMessageToNote(context.editedMessage))
-        await this.reactToNewMessage(context)
-      }
+      await this.$onEditedTelegramTextMessage(context.editedMessage)
     })
 
     this.bot.on('message_reaction', async (context) => {
@@ -136,25 +237,10 @@ export class TelegramProducer {
         const storedNote = await this.bucket.storeNote(updatedNote)
         const syncedNote = await this.syncNote(context.chat.id, storedNote, { keepOriginalMessage })
         if (syncedNote) {
-          await this.syncNoteReactions(syncedNote)
+          await this.$syncNoteReactions(syncedNote)
         }
       }
     })
-  }
-
-  private async reactToNewMessage(context: Context) {
-    try {
-      await context.react({ type: 'emoji', emoji: '👀' })
-      setTimeout(async () => {
-        try {
-          context.react()
-        } catch (err) {
-          logger.warn({ err }, 'Could remove reaction from a new message')
-        }
-      }, 3000)
-    } catch (err) {
-      logger.warn({ err }, 'Could add reaction to a new message')
-    }
   }
 
   async syncNotes(chatId: number) {
@@ -164,7 +250,7 @@ export class TelegramProducer {
     for (const note of notes) {
       const syncedNoted = await this.syncNote(chatId, note)
       if (syncedNoted) {
-        await this.syncNoteReactions(syncedNoted)
+        await this.$syncNoteReactions(syncedNoted)
       }
     }
   }
@@ -239,27 +325,6 @@ export class TelegramProducer {
       tags: note.tags,
       vendorEntities: mergeVendorEntities(note.vendorEntities, createTelegramMessageVendorEntity(message)),
     })
-  }
-
-  async syncNoteReactions(note: Note) {
-    logger.debug({ note }, 'Syncing telegram reactions for note')
-
-    const telegramVendorEntity = getVendorEntity(note.vendorEntities, 'telegram_message')
-    if (!telegramVendorEntity) return
-
-    try {
-      await this.bot.telegram.setMessageReaction(
-        telegramVendorEntity.metadata.chatId,
-        telegramVendorEntity.metadata.messageId,
-        note.status === 'done'
-          ? [{ type: 'emoji', emoji: '💯' }]
-          : note.status === 'in_progress'
-            ? [{ type: 'emoji', emoji: '✍' }]
-            : undefined,
-      )
-    } catch (err) {
-      logger.warn({ err, note }, 'Could not change message reaction')
-    }
   }
 
   // TODO: implement noteToTelegramMessageText(note: { content: string; tags: string[] }): string
