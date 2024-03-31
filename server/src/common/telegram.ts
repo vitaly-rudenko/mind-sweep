@@ -91,17 +91,6 @@ export const withPrivateChat = () => {
   }
 }
 
-export const withChatId = () => {
-  return async (context: Context, next: Function) => {
-    if (context.chat) {
-      context.state.chatId = context.chat.id
-    }
-
-    return next()
-  }
-}
-
-
 export function wrap<
   Middleware extends (context: T, next: Function) => unknown,
   T extends Context,

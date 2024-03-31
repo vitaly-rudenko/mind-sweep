@@ -1,11 +1,13 @@
 import type { Context, Telegraf } from 'telegraf'
 import { message, editedMessage } from 'telegraf/filters'
-import type { Note, Bucket } from '../types.js'
+import type { Note, Bucket, VendorEntity, VendorEntityType } from '../types.js'
 import { logger } from '../common/logger.js'
 import { createTelegramMessageVendorEntity, createTelegramMessageVendorEntityId } from './vendor-entity.js'
 import { createVendorEntityHash, getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
 import { noteToTelegramMessageText, parseTelegramMessage, telegramMessageToNote } from './notes.js'
 import type { Message, MessageReactionUpdated } from 'telegraf/types'
+
+const vendorEntityTypes: VendorEntityType[] = ['telegram_message', 'notion_page']
 
 const experimentalEmojiTags = [
   { emoji: '🔥', tag: 'Today' },
@@ -16,17 +18,29 @@ const experimentalEmojiTags = [
 export class TelegramProducer {
   constructor(
     private readonly bot: Telegraf,
-    private readonly bucket: Bucket,
+    private readonly notionBucket: Bucket,
   ) {}
 
-  async $updateNote(note: Note) {
-    await this.bucket.storeNote(note)
-    await this.$syncNoteReactions(note)
+  async $updateNote(note: Note, syncedVendorEntityTypes: VendorEntityType[]) {
+    const unsyncedVendorEntityType = vendorEntityTypes.find((vendorEntityType) => !syncedVendorEntityTypes.includes(vendorEntityType))
+    if (!unsyncedVendorEntityType) return
+
+    let updatedNote: Note
+    if (unsyncedVendorEntityType === 'notion_page') {
+      updatedNote = await this.notionBucket.storeNote(note)
+    } else if (unsyncedVendorEntityType === 'telegram_message') {
+      updatedNote = await this.syncNote(null, note, { keepOriginalMessage: true })
+    }
+
+    await this.$updateNote(updatedNote, [...syncedVendorEntityTypes, unsyncedVendorEntityType])
   }
 
   async $createNote(note: Note) {
-    await this.bucket.storeNote(note)
-    await this.$syncNoteReactions(note)
+    await this.notionBucket.storeNote(note)
+  }
+
+  async $deleteNote(note: Note) {
+    await this.notionBucket.deleteNote(note)
   }
 
   async $syncNoteReactions(note: Note) {
@@ -50,8 +64,8 @@ export class TelegramProducer {
     }
   }
 
-  async $deleteTelegramMessage(message: NonNullable<Message.TextMessage['reply_to_message']>) {
-    await this.bot.telegram.deleteMessage(message.chat.id, message.message_id)
+  async $deleteTelegramMessage(chatId: number, messageId: number) {
+    await this.bot.telegram.deleteMessage(chatId, messageId)
   }
 
   async $onNewTelegramTextMessage(message: Message.TextMessage) {
@@ -59,7 +73,7 @@ export class TelegramProducer {
 
     if (message.reply_to_message) {
       const originalMessage = message.reply_to_message
-      const originalNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
+      const originalNote = await this.notionBucket.getNoteByVendorEntities('telegram_message', createTelegramMessageVendorEntityId(originalMessage))
 
       if (originalNote) {
         await this.$updateNote({
@@ -72,7 +86,7 @@ export class TelegramProducer {
         await this.$createNote(telegramMessageToNote(message))
       }
 
-      await this.$deleteTelegramMessage(originalMessage)
+      await this.$deleteTelegramMessage(originalMessage.chat.id, originalMessage.message_id)
     } else {
       await this.$createNote(telegramMessageToNote(message))
     }
@@ -81,7 +95,7 @@ export class TelegramProducer {
   async $onEditedTelegramTextMessage(message: Message.TextMessage) {
     const { content, tags } = parseTelegramMessage(message)
 
-    const existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(message))
+    const existingNote = await this.notionBucket.getNoteByVendorEntities('telegram_message', createTelegramMessageVendorEntityId(message))
     if (existingNote) {
       await this.$updateNote({
         content,
@@ -98,11 +112,11 @@ export class TelegramProducer {
     const oldReaction = messageReaction.old_reaction[0]
     const newReaction = messageReaction.new_reaction[0]
 
-    let existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(messageReaction))
+    let existingNote = await this.notionBucket.getNoteByVendorEntities('telegram_message', createTelegramMessageVendorEntityId(messageReaction))
     let keepOriginalMessage = !existingNote
     if (!existingNote) {
       // Create a "recovery" note in the bucket
-      existingNote = await this.bucket.storeNote({
+      existingNote = await this.notionBucket.storeNote({
         content: '',
         status: 'not_started',
         tags: [],
@@ -121,8 +135,8 @@ export class TelegramProducer {
     if (newReaction?.type === 'emoji') {
       // Special emojis for deleting note
       if (newReaction.emoji === '💩') {
-        await this.bucket.deleteNote(existingNote)
-        await this.bot.telegram.deleteMessage(messageReaction.chat.id, messageReaction.message_id)
+        await this.$deleteNote(existingNote) // TODO: maybe deleting telegram message should be in $deleteNote?
+        await this.$deleteTelegramMessage(messageReaction.chat.id, messageReaction.message_id)
         return
       }
 
@@ -151,7 +165,7 @@ export class TelegramProducer {
     }
 
     if (updatedNote) {
-      const storedNote = await this.bucket.storeNote(updatedNote)
+      const storedNote = await this.notionBucket.storeNote(updatedNote)
       const syncedNote = await this.syncNote(messageReaction.chat.id, storedNote, { keepOriginalMessage })
       if (syncedNote) {
         await this.$syncNoteReactions(syncedNote)
@@ -181,11 +195,11 @@ export class TelegramProducer {
       const oldReaction = context.messageReaction.old_reaction[0]
       const newReaction = context.messageReaction.new_reaction[0]
 
-      let existingNote = await this.bucket.getNote('telegram_message', createTelegramMessageVendorEntityId(context.messageReaction))
+      let existingNote = await this.notionBucket.getNoteByVendorEntities('telegram_message', createTelegramMessageVendorEntityId(context.messageReaction))
       let keepOriginalMessage = !existingNote
       if (!existingNote) {
         // Create a "recovery" note in the bucket
-        existingNote = await this.bucket.storeNote({
+        existingNote = await this.notionBucket.storeNote({
           content: '',
           status: 'not_started',
           tags: [],
@@ -204,7 +218,7 @@ export class TelegramProducer {
       if (newReaction?.type === 'emoji') {
         // Special emojis for deleting note
         if (newReaction.emoji === '💩') {
-          await this.bucket.deleteNote(existingNote)
+          await this.notionBucket.deleteNote(existingNote)
           await context.deleteMessage()
           return
         }
@@ -234,7 +248,7 @@ export class TelegramProducer {
       }
 
       if (updatedNote) {
-        const storedNote = await this.bucket.storeNote(updatedNote)
+        const storedNote = await this.notionBucket.storeNote(updatedNote)
         const syncedNote = await this.syncNote(context.chat.id, storedNote, { keepOriginalMessage })
         if (syncedNote) {
           await this.$syncNoteReactions(syncedNote)
@@ -244,7 +258,7 @@ export class TelegramProducer {
   }
 
   async syncNotes(chatId: number) {
-    const notes = await this.bucket.getNotes()
+    const notes = await this.notionBucket.getAllNotes()
     logger.debug({ chatId, notes }, 'Syncing notes')
 
     for (const note of notes) {
@@ -261,11 +275,11 @@ export class TelegramProducer {
     const telegramVendorEntity = getVendorEntity(note.vendorEntities, 'telegram_message')
     const messageText = noteToTelegramMessageText(note)
 
-    // New note
+    // Note is not created on telegram yet
     if (!telegramVendorEntity) {
       const message = await this.bot.telegram.sendMessage(chatId, messageText)
 
-      return this.bucket.storeNote({
+      return this.notionBucket.storeNote({
         content: note.content,
         status: note.status,
         tags: note.tags,
@@ -273,7 +287,7 @@ export class TelegramProducer {
       })
     }
 
-    // Deleted note
+    // Note has been marked as deleted
     if (note.status === 'to_delete') {
       try {
         await this.bot.telegram.deleteMessage(telegramVendorEntity.metadata.chatId, telegramVendorEntity.metadata.messageId)
@@ -287,11 +301,11 @@ export class TelegramProducer {
         }
       }
 
-      await this.bucket.deleteNote(note)
+      await this.notionBucket.deleteNote(note)
       return undefined
     }
 
-    // Updated note
+    // Note has been updated
     if (telegramVendorEntity.hash === createVendorEntityHash(messageText)) {
       return note
     }
@@ -319,7 +333,7 @@ export class TelegramProducer {
       }
     }
 
-    return this.bucket.storeNote({
+    return this.notionBucket.storeNote({
       content: note.content,
       status: note.status,
       tags: note.tags,

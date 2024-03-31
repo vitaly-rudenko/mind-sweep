@@ -1,19 +1,17 @@
 import { APIResponseError, type Client } from '@notionhq/client'
-import type { Bucket, Note, VendorEntityId, VendorEntityType } from '../types.js'
+import type { Bucket, Note, Readable, VendorEntity, VendorEntityId, VendorEntityQuery, VendorEntityType, Writable } from '../types.js'
 import { createNotionPageVendorEntity } from './vendor-entity.js'
 import { getVendorEntity, mergeVendorEntities } from '../vendor-entity.js'
 import { noteToNotionPageProperties, notionPagesToNotes } from './serialization.js'
 import { logger } from '../common/logger.js'
+import type { QueryDatabaseResponse } from '@notionhq/client/build/src/api-endpoints.js'
 
 const pageProperties = ['Name', 'Tags', 'Status', 'entity:telegram_message']
 
-export class NotionBucket implements Bucket {
-  constructor(
-    private readonly notion: Client,
-    private readonly databaseId: string,
-  ) {}
+export class NotionIntegration implements Readable, Writable {
+  constructor(private readonly notion: Client) {}
 
-  async getNotes() {
+  async getAllNotes() {
     const response = await this.notion.databases.query({
       database_id: this.databaseId,
       archived: false,
@@ -24,28 +22,26 @@ export class NotionBucket implements Bucket {
     return notionPagesToNotes(this.databaseId, response.results)
   }
 
-  async getNote(vendorEntityType: VendorEntityType, vendorEntityId: VendorEntityId) {
+  async getNoteByVendorEntity(vendorEntityQuery: VendorEntityQuery): Promise<Note | undefined> {
     const response = await this.notion.databases.query({
       database_id: this.databaseId,
       archived: false,
       page_size: 1,
       filter: {
-        property: `entity:${vendorEntityType}`,
+        property: `entity:${vendorEntityQuery.type}`,
         rich_text: {
-          starts_with: `${vendorEntityId}:`,
+          starts_with: `${vendorEntityQuery.id}:`,
         },
       }
     })
 
-    logger.debug({ vendorEntityType, vendorEntityId, response }, 'Retrieved a note from the Notion database')
+    logger.debug({ vendorEntityQuery, response }, 'Retrieved page from the Notion database')
 
     return notionPagesToNotes(this.databaseId, response.results).at(0)
   }
 
-  async storeNote(note: Note, retry = true): Promise<Note> {
+  async storeNote(note: Note, retry = true): Promise<VendorEntity> {
     try {
-      logger.debug({ note }, 'Storing a note to the Notion database')
-
       const vendorEntity = getVendorEntity(note.vendorEntities, 'notion_page')
 
       if (vendorEntity) {
@@ -53,18 +49,15 @@ export class NotionBucket implements Bucket {
           page_id: vendorEntity.metadata.pageId,
           properties: noteToNotionPageProperties(note),
         })
-        return note
+        return vendorEntity
       }
 
       const page = await this.notion.pages.create({
-        parent: { database_id: this.databaseId  },
+        parent: { database_id: this.databaseId },
         properties: noteToNotionPageProperties(note),
       })
 
-      return {
-        ...note,
-        vendorEntities: mergeVendorEntities(note.vendorEntities, createNotionPageVendorEntity(this.databaseId, page)),
-      }
+      return createNotionPageVendorEntity(this.databaseId, page)
     } catch (err) {
       logger.error({ err, note, retry }, 'Failed to store a note to the Notion database')
 
@@ -78,11 +71,11 @@ export class NotionBucket implements Bucket {
   }
 
   async deleteNote(note: Note) {
-    const notionPageVendorEntity = getVendorEntity(note.vendorEntities, 'notion_page')
-    if (!notionPageVendorEntity) throw new Error('Unsupported vendor entity type')
+    const vendorEntity = getVendorEntity(note.vendorEntities, 'notion_page')
+    if (!vendorEntity) throw new Error('NotionPageVendorEntity not found')
 
     await this.notion.pages.update({
-      page_id: notionPageVendorEntity.metadata.pageId,
+      page_id: vendorEntity.metadata.pageId,
       archived: true,
     })
   }

@@ -1,4 +1,4 @@
-import type { TelegramMessageVendorEntity } from '../types.js'
+import type { TelegramMessageVendorEntity, VendorEntityQuery } from '../types.js'
 import { createVendorEntityHash } from '../vendor-entity.js'
 
 export function createTelegramMessageVendorEntity(message: {
@@ -20,6 +20,16 @@ export function createTelegramMessageVendorEntity(message: {
       messageId: message.message_id,
       fromUserId: message.from.id,
     }
+  }
+}
+
+export function createTelegramMessageVendorEntityQuery(message: {
+  chat: { id: number }
+  message_id: number
+}): VendorEntityQuery {
+  return {
+    type: 'telegram_message',
+    id: createTelegramMessageVendorEntityId(message)
   }
 }
 

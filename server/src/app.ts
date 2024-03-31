@@ -8,18 +8,15 @@ import { Redis } from 'ioredis'
 import { logger } from './common/logger.js'
 import { env } from './env.js'
 import { registry } from './registry.js'
-import { Telegraf } from 'telegraf'
 import { getAppVersion } from './common/utils.js'
 import { localize } from './localization/localize.js'
-import { withChatId } from './common/telegram.js'
-import { withLocale } from './localization/telegram.js'
 import { createWebAppUrlGenerator } from './web-app/utils.js'
 import { ApiError } from './common/errors.js'
-import { withUserId } from './users/telegram.js'
 import { ZodError } from 'zod'
 import { Client } from '@notionhq/client'
-import { NotionBucket } from './notion/notion-bucket.js'
-import { TelegramProducer } from './telegram/telegram-producer.js'
+import { NotionIntegration } from './notion/notion-integration.js'
+import { TelegramIntegration } from './telegram/telegram-integration.js'
+import { InMemoryQueue } from './in-memory-queue.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -41,23 +38,11 @@ async function start() {
     }
   }
 
-  const telegramBotToken = env.TELEGRAM_BOT_TOKEN
-  if (!telegramBotToken) {
-    throw new Error('Telegram bot token is not defined')
-  }
-
-  const bot = new Telegraf(telegramBotToken)
-
-  process.once('SIGINT', () => bot.stop('SIGINT'))
-  process.once('SIGTERM', () => bot.stop('SIGTERM'))
-
   registry.values({
     webAppName: env.WEB_APP_NAME,
     webAppUrl: env.WEB_APP_URL,
     debugChatId: env.DEBUG_CHAT_ID,
-    botInfo: await bot.telegram.getMe(),
     localize,
-    telegram: bot.telegram,
     version: getAppVersion(),
   })
 
@@ -66,10 +51,6 @@ async function start() {
   registry.values({
     generateWebAppUrl,
   })
-
-  bot.telegram.setMyCommands([
-    { command: 'start', description: 'Get help' },
-  ])
 
   process.on('uncaughtException', (err) => {
     logger.error({ err }, 'Uncaught exception')
@@ -81,22 +62,13 @@ async function start() {
     process.exit(1)
   })
 
-  bot.use((context, next) => {
-    if (!env.USE_TEST_MODE && context.from?.is_bot) return
-    return next()
-  })
+  const inMemoryQueue = new InMemoryQueue()
+  const notionIntegration = new NotionIntegration(new Client())
+  const telegramIntegration = new TelegramIntegration(env.TELEGRAM_BOT_TOKEN, inMemoryQueue)
 
-  bot.use(withUserId())
-  bot.use(withChatId())
-  bot.use(withLocale())
+  inMemoryQueue.registerEventHandler(telegramIntegration)
 
-  const databaseId = env.NOTION_TEST_DATABASE_ID
-  const notion = new Client({ auth: env.NOTION_TEST_INTEGRATION_SECRET })
-
-  const notionBucket = new NotionBucket(notion, databaseId)
-  const telegramProducer = new TelegramProducer(bot, notionBucket)
-
-  telegramProducer.produce()
+  await telegramIntegration.listen()
 
   const app = express()
   app.use(helmet({
@@ -155,19 +127,6 @@ async function start() {
     }
   })
 
-  bot.catch(async (err, context) => {
-    logger.error({
-      err,
-      ...context && {
-        context: {
-          ...context.update && Object.keys(context.update).length > 0 ? { update: context.update } : undefined,
-          ...context.botInfo && Object.keys(context.botInfo).length > 0 ? { botInfo: context.botInfo } : undefined,
-          ...context.state && Object.keys(context.state).length > 0 ? { state: context.state } : undefined,
-        }
-      },
-    }, 'Unhandled telegram error')
-  })
-
   if (env.ENABLE_TEST_HTTPS) {
     logger.warn({}, 'Starting server in test HTTPS mode')
     // https://stackoverflow.com/a/69743888
@@ -180,14 +139,6 @@ async function start() {
     logger.info({}, 'Starting server')
     await new Promise(resolve => app.listen(env.PORT, () => resolve(undefined)))
   }
-
-  logger.info({}, 'Starting telegram bot')
-  bot.launch({
-    allowedUpdates: ['message', 'edited_message', 'message_reaction', 'callback_query']
-  }).catch((err) => {
-    logger.fatal({ err }, 'Could not launch telegram bot')
-    process.exit(1)
-  })
 }
 
 start()
