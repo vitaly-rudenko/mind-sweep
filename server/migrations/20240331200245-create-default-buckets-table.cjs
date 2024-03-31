@@ -4,11 +4,11 @@ module.exports = {
     await db.query('BEGIN;')
 
     await db.query(`
-      CREATE TABLE default_integrations (
+      CREATE TABLE default_buckets (
         user_id INT NOT NULL REFERENCES users(id),
+        bucket_id INT NOT NULL REFERENCES buckets(id),
         integration_id INT NOT NULL REFERENCES integrations(id),
-        integration_type INTEGRATION_TYPE NOT NULL,
-        PRIMARY KEY (user_id, integration_type)
+        PRIMARY KEY (user_id, integration_id)
       );
     `)
 
@@ -20,7 +20,7 @@ module.exports = {
     await db.query('BEGIN;')
 
     await db.query(`
-      DROP TABLE default_integrations;
+      DROP TABLE default_buckets;
     `)
 
     await db.query('COMMIT;')

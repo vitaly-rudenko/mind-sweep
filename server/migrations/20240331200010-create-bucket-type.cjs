@@ -2,16 +2,12 @@ module.exports = {
   /** @param {{ context: import('pg').Pool }} context */
   async up({ context: db }) {
     await db.query(`
-      CREATE TABLE users (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        locale LOCALE NOT NULL
-      );
+      CREATE TYPE BUCKET_TYPE AS ENUM ('telegram_chat', 'notion_database');
     `)
   },
 
   /** @param {{ context: import('pg').Pool }} context */
   async down({ context: db }) {
-    await db.query('DROP TABLE users;')
+    await db.query('DROP TYPE BUCKET_TYPE;')
   },
 }

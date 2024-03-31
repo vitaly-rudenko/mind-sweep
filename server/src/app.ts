@@ -17,6 +17,7 @@ import { createWebAppUrlGenerator } from './web-app/utils.js'
 import { ApiError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError } from 'zod'
+import { PostgresStorage } from './users/postgres-storage.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -86,6 +87,41 @@ async function start() {
   bot.use(withUserId())
   bot.use(withChatId())
   bot.use(withLocale())
+
+  const storage = new PostgresStorage(pgClient)
+
+  bot.command('start', async (context) => {
+    const integrationQueryId = String(context.from.id)
+    const bucketQueryId = String(context.chat.id)
+
+    const user = await storage.getUserByIntegrationQueryId('telegram', integrationQueryId)
+
+    if (!user) {
+      await storage.createUserWithIntegration({
+        name: context.from.first_name,
+        locale: context.state.locale,
+      }, {
+        name: 'Default',
+        integrationType: 'telegram',
+        queryId: integrationQueryId,
+        metadata: {
+          userId: context.from.id,
+          username: context.from.username,
+        }
+      }, {
+        name: 'Default',
+        bucketType: 'telegram_chat',
+        queryId: bucketQueryId,
+        metadata: {
+          chatId: context.chat.id,
+        }
+      })
+
+      await context.reply('Welcome to the MindSweep! 🎉')
+    } else {
+      await context.reply('Welcome back! 🙂')
+    }
+  })
 
   const app = express()
   app.use(helmet({

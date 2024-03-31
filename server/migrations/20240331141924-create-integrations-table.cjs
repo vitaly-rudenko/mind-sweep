@@ -5,18 +5,13 @@ module.exports = {
 
     await db.query(`
       CREATE TABLE integrations (
-        id INT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
         user_id INT NOT NULL REFERENCES users(id),
         query_id TEXT NOT NULL,
-        type INTEGRATION_TYPE NOT NULL,
+        integration_type INTEGRATION_TYPE NOT NULL,
         metadata JSONB NOT NULL
       );
-    `)
-
-    // Integration's Query ID must be globally unique per type
-    await db.query(`
-      CREATE UNIQUE INDEX integrations_type_query_id_unique_idx
-      ON integrations (type, query_id);
     `)
 
     await db.query('COMMIT;')

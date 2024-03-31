@@ -2,7 +2,7 @@ module.exports = {
   /** @param {{ context: import('pg').Pool }} context */
   async up({ context: db }) {
     await db.query(`
-      CREATE TYPE INTEGRATION_TYPE AS ENUM ('telegram', 'notion', 'todoist');
+      CREATE TYPE INTEGRATION_TYPE AS ENUM ('telegram', 'notion');
     `)
   },
 
