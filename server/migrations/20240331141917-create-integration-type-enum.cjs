@@ -1,23 +1,13 @@
 module.exports = {
   /** @param {{ context: import('pg').Pool }} context */
   async up({ context: db }) {
-    await db.query('BEGIN;')
-
     await db.query(`
-      -- TODO: make changes
+      CREATE TYPE INTEGRATION_TYPE AS ENUM ('telegram', 'notion', 'todoist');
     `)
-
-    await db.query('COMMIT;')
   },
 
   /** @param {{ context: import('pg').Pool }} context */
   async down({ context: db }) {
-    await db.query('BEGIN;')
-
-    await db.query(`
-      -- TODO: revert changes
-    `)
-
-    await db.query('COMMIT;')
+    await db.query('DROP TYPE INTEGRATION_TYPE;')
   },
 }
