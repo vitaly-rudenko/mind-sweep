@@ -17,9 +17,6 @@ import { createWebAppUrlGenerator } from './web-app/utils.js'
 import { ApiError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError } from 'zod'
-import { Client } from '@notionhq/client'
-import { NotionBucket } from './notion/notion-bucket.js'
-import { TelegramProducer } from './telegram/telegram-producer.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -89,14 +86,6 @@ async function start() {
   bot.use(withUserId())
   bot.use(withChatId())
   bot.use(withLocale())
-
-  const databaseId = env.NOTION_TEST_DATABASE_ID
-  const notion = new Client({ auth: env.NOTION_TEST_INTEGRATION_SECRET })
-
-  const notionBucket = new NotionBucket(notion, databaseId)
-  const telegramProducer = new TelegramProducer(bot, notionBucket)
-
-  telegramProducer.produce()
 
   const app = express()
   app.use(helmet({
