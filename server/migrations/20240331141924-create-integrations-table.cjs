@@ -14,6 +14,11 @@ module.exports = {
       );
     `)
 
+    await db.query(`
+      CREATE UNIQUE INDEX integrations_user_id_query_id_idx
+        ON integrations (user_id, query_id);
+    `)
+
     await db.query('COMMIT;')
   },
 

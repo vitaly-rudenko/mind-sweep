@@ -39,3 +39,12 @@ export type Bucket<T extends BucketType> = {
   metadata: T extends BucketType ? BucketMetadata[T] : unknown
   integrationId: number
 }
+
+export type Link = {
+  id: number
+  userId: number
+  fromBucketId: number
+  toBucketId: number
+  template?: string
+  defaultTags?: string[]
+}

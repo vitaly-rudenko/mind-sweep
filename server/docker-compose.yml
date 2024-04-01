@@ -27,7 +27,7 @@ services:
 
   ms_postgres:
     container_name: ms_postgres
-    image: postgres:13-alpine
+    image: postgres:15-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: "mindsweep"

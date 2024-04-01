@@ -15,6 +15,16 @@ module.exports = {
       )
     `)
 
+    await db.query(`
+      CREATE UNIQUE INDEX buckets_user_id_query_id_idx
+        ON buckets (user_id, query_id);
+    `)
+
+    await db.query(`
+      CREATE INDEX buckets_integration_id_idx
+        ON buckets (integration_id);
+    `)
+
     await db.query('COMMIT;')
   },
 

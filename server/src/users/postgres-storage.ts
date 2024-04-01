@@ -1,5 +1,5 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, Integration, IntegrationType } from '../integration.js'
+import type { Bucket, BucketType, Integration, IntegrationType, Link } from '../integration.js'
 import type { User } from './user.js'
 
 type UserRow = {
@@ -17,12 +17,6 @@ type IntegrationRow<T extends IntegrationType | unknown = unknown> = {
   metadata: Integration<T>['metadata']
 }
 
-type DefaultIntegrationRow<T extends IntegrationType | unknown = unknown> = {
-  user_id: number
-  integration_id: number
-  integration_type: T
-}
-
 type BucketRow<T extends BucketType> = {
   id: number
   name: string
@@ -33,14 +27,30 @@ type BucketRow<T extends BucketType> = {
   integration_id: number
 }
 
+type LinkRow = {
+  id: number
+  user_id: number
+  from_bucket_id: number
+  to_bucket_id: number
+  template: string | null
+  default_tags: string[] | null
+}
+
 export class PostgresStorage {
   constructor(private readonly client: Client) {}
+
+  async createLink(link: Omit<Link, 'id'>): Promise<void> {
+    await this.client.query<LinkRow>(`
+      INSERT INTO links (user_id, from_bucket_id, to_bucket_id, template, default_tags)
+      VALUES ($1, $2, $3, $4, $5);
+    `, [link.userId, link.fromBucketId, link.toBucketId, link.template, link.defaultTags])
+  }
 
   async createUserWithIntegration<I extends IntegrationType, B extends BucketType>(
     user: Omit<User, 'id'>,
     integration: Omit<Integration<I>, 'id' | 'userId'>,
     bucket: Omit<Bucket<B>, 'id' | 'userId' | 'integrationId'>
-  ): Promise<User> {
+  ): Promise<{ user: User }> {
     try {
       await this.client.query('BEGIN;')
 
@@ -56,28 +66,20 @@ export class PostgresStorage {
         RETURNING id;
       `, [integration.name, userId, integration.queryId, integration.integrationType, integration.metadata])
 
-      await this.client.query(`
-        INSERT INTO default_integrations (user_id, integration_id, integration_type)
-        VALUES ($1, $2, $3);
-      `, [userId, integrationId, integration.integrationType])
-
       const { rows: [{ id: bucketId }] } = await this.client.query<BucketRow<BucketType>>(`
         INSERT INTO buckets (name, user_id, query_id, bucket_type, metadata, integration_id)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id;
       `, [bucket.name, userId, bucket.queryId, bucket.bucketType, bucket.metadata, integrationId])
 
-      await this.client.query(`
-        INSERT INTO default_buckets (user_id, bucket_id, integration_id)
-        VALUES ($1, $2, $3);
-      `, [userId, bucketId, integrationId])
-
       await this.client.query('COMMIT;')
 
       return {
-        id: userId,
-        name: user.name,
-        locale: user.locale,
+        user: {
+          id: userId,
+          name: user.name,
+          locale: user.locale,
+        }
       }
     } catch (err) {
       await this.client.query('ROLLBACK;')

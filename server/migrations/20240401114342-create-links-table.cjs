@@ -4,12 +4,20 @@ module.exports = {
     await db.query('BEGIN;')
 
     await db.query(`
-      CREATE TABLE default_buckets (
+      CREATE TABLE links (
+        id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
-        bucket_id INT NOT NULL REFERENCES buckets(id),
-        integration_id INT NOT NULL REFERENCES integrations(id),
-        PRIMARY KEY (user_id, integration_id)
+        from_bucket_id INT NOT NULL REFERENCES buckets(id),
+        to_bucket_id INT NOT NULL REFERENCES buckets(id),
+        template TEXT,
+        default_tags TEXT[]
       );
+    `)
+
+    await db.query(`
+      CREATE UNIQUE INDEX
+        ON links (user_id, from_bucket_id, to_bucket_id, template)
+        NULLS NOT DISTINCT;
     `)
 
     await db.query('COMMIT;')
@@ -20,7 +28,7 @@ module.exports = {
     await db.query('BEGIN;')
 
     await db.query(`
-      DROP TABLE default_buckets;
+      DROP TABLE links;
     `)
 
     await db.query('COMMIT;')
