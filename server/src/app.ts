@@ -18,6 +18,8 @@ import { ApiError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
+import type { InitialTelegramContextState, TelegramContextState } from './telegram-context-state.js'
+import { formatTelegramUserName } from './format-telegram-user-name.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -90,27 +92,39 @@ async function start() {
 
   const storage = new PostgresStorage(pgClient)
 
-  bot.command('start', async (context) => {
-    const integrationQueryId = String(context.from.id)
-    const bucketQueryId = String(context.chat.id)
+  const botInfo = await bot.telegram.getMe()
 
-    const user = await storage.getUserByIntegrationQueryId('telegram', integrationQueryId)
+  bot.use(async (context, next) => {
+    if (!context.from || !context.chat) return
+
+    Object.assign(context.state, {
+      integrationType: 'telegram',
+      integrationQueryId: String(context.from.id),
+      bucketType: 'telegram_chat',
+      bucketQueryId: String(context.chat.id),
+      user: await storage.getUserByIntegrationQueryId(context.state.integrationType, context.state.integrationQueryId),
+    } satisfies InitialTelegramContextState)
+
+    return next()
+  });
+
+  bot.command('start', async (context) => {
+    const { user, locale, integrationQueryId, integrationType, bucketQueryId, bucketType } = context.state as TelegramContextState
 
     if (!user) {
       await storage.createUserWithIntegration({
         name: context.from.first_name,
-        locale: context.state.locale,
+        locale,
       }, {
-        name: 'Default',
-        integrationType: 'telegram',
+        name: formatTelegramUserName(context.from),
+        integrationType,
         queryId: integrationQueryId,
         metadata: {
           userId: context.from.id,
-          username: context.from.username,
         }
       }, {
-        name: 'Default',
-        bucketType: 'telegram_chat',
+        name: context.chat.type === 'private' ? formatTelegramUserName(botInfo) : context.chat.title,
+        bucketType,
         queryId: bucketQueryId,
         metadata: {
           chatId: context.chat.id,
@@ -121,6 +135,11 @@ async function start() {
     } else {
       await context.reply('Welcome back! 🙂')
     }
+  })
+
+  bot.use(async (context, next) => {
+    if (context.state.user) return next()
+    await context.reply('We don\'t know you yet 👀. Please use /start command to get started.')
   })
 
   const app = express()

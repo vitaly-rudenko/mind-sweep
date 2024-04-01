@@ -3,7 +3,6 @@ export type IntegrationType = 'telegram' | 'notion'
 type IntegrationMetadata = {
   telegram: {
     userId: number
-    username?: string
   }
   notion: {
     integrationSecret: string

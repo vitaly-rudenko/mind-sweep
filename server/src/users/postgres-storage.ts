@@ -66,7 +66,7 @@ export class PostgresStorage {
         RETURNING id;
       `, [integration.name, userId, integration.queryId, integration.integrationType, integration.metadata])
 
-      const { rows: [{ id: bucketId }] } = await this.client.query<BucketRow<BucketType>>(`
+      await this.client.query<BucketRow<BucketType>>(`
         INSERT INTO buckets (name, user_id, query_id, bucket_type, metadata, integration_id)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id;
