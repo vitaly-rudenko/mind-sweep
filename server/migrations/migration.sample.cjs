@@ -10,6 +10,8 @@ const down = wrapInTransaction(async (client) => {
   `)
 })
 
+// -----------------------------------------------
+
 /** @param {(client: import('pg').Client) => Promise<void>} fn */
 function wrapInTransaction(fn) {
   /** @param {{ context: import('pg').Client }} context */

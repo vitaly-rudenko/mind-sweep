@@ -5,6 +5,7 @@ type IntegrationMetadata = {
     userId: number
   }
   notion: {
+    userId: string
     integrationSecret: string
   }
 }
@@ -16,6 +17,14 @@ export type Integration<T extends IntegrationType | unknown = unknown> = {
   queryId: string
   integrationType: T
   metadata: T extends IntegrationType ? IntegrationMetadata[T] : unknown
+  isLoginMethod: boolean
+}
+
+export type AuthIntegration<T extends IntegrationType> = {
+  userId: number
+  integrationId: number
+  integrationType: T
+  integrationQueryId: string
 }
 
 export type BucketType = 'telegram_chat' | 'notion_database'

@@ -97,12 +97,15 @@ async function start() {
   bot.use(async (context, next) => {
     if (!context.from || !context.chat) return
 
+    const integrationType = 'telegram'
+    const integrationQueryId = String(context.from.id)
+
     Object.assign(context.state, {
-      integrationType: 'telegram',
-      integrationQueryId: String(context.from.id),
+      integrationType,
+      integrationQueryId,
       bucketType: 'telegram_chat',
       bucketQueryId: String(context.chat.id),
-      user: await storage.getUserByIntegrationQueryId(context.state.integrationType, context.state.integrationQueryId),
+      user: await storage.getUserByLoginMethod(integrationType, integrationQueryId),
     } satisfies InitialTelegramContextState)
 
     return next()

@@ -15,6 +15,7 @@ type IntegrationRow<T extends IntegrationType | unknown = unknown> = {
   query_id: string
   integration_type: T
   metadata: Integration<T>['metadata']
+  is_login_method: boolean
 }
 
 type BucketRow<T extends BucketType> = {
@@ -48,7 +49,7 @@ export class PostgresStorage {
 
   async createUserWithIntegration<I extends IntegrationType, B extends BucketType>(
     user: Omit<User, 'id'>,
-    integration: Omit<Integration<I>, 'id' | 'userId'>,
+    integration: Omit<Integration<I>, 'id' | 'userId' | 'isLoginMethod'>,
     bucket: Omit<Bucket<B>, 'id' | 'userId' | 'integrationId'>
   ): Promise<{ user: User }> {
     try {
@@ -61,8 +62,8 @@ export class PostgresStorage {
       `, [user.name, user.locale])
 
       const { rows: [{ id: integrationId }] } = await this.client.query<IntegrationRow>(`
-        INSERT INTO integrations (name, user_id, query_id, integration_type, metadata)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO integrations (name, user_id, query_id, integration_type, metadata, is_login_method)
+        VALUES ($1, $2, $3, $4, $5, TRUE)
         RETURNING id;
       `, [integration.name, userId, integration.queryId, integration.integrationType, integration.metadata])
 
@@ -87,12 +88,12 @@ export class PostgresStorage {
     }
   }
 
-  async getUserByIntegrationQueryId<T extends IntegrationType>(integrationType: T, integrationQueryId: string): Promise<User | undefined> {
+  async getUserByLoginMethod<T extends IntegrationType>(integrationType: T, integrationQueryId: string): Promise<User | undefined> {
     const { rows } = await this.client.query<UserRow>(`
       SELECT users.*
       FROM integrations
       INNER JOIN users ON users.id = integrations.user_id
-      WHERE integration_type = $1 AND query_id = $2
+      WHERE integration_type = $1 AND query_id = $2 AND is_login_method = TRUE
       LIMIT 1;
     `, [integrationType, integrationQueryId])
 
@@ -100,25 +101,6 @@ export class PostgresStorage {
       id: rows[0].id,
       name: rows[0].name,
       locale: rows[0].locale,
-    } : undefined
-  }
-
-  async getDefaultIntegrationByUserId<T extends IntegrationType>(userId: number, integrationType: T): Promise<Integration<T> | undefined> {
-    const { rows } = await this.client.query<IntegrationRow<T>>(`
-      SELECT integrations.*
-      FROM default_integrations
-      INNER JOIN integrations ON integrations.id = default_integrations.integration_id
-      WHERE user_id = $1 AND integration_type = $2
-      LIMIT 1;
-    `, [userId, integrationType])
-
-    return rows[0] ? {
-      id: rows[0].id,
-      name: rows[0].name,
-      userId: rows[0].user_id,
-      queryId: rows[0].query_id,
-      integrationType: rows[0].integration_type,
-      metadata: rows[0].metadata,
     } : undefined
   }
 }
