@@ -1,5 +1,4 @@
-import { Button } from '@/components/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/card'
 import { Separator } from '@/components/separator'
 import { cn } from '@/utils/cn'
 import { useState, type FC, type ReactNode } from 'react'
