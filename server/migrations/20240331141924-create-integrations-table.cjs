@@ -2,12 +2,11 @@ const up = wrapInTransaction(async (client) => {
   await client.query(`
     CREATE TABLE integrations (
       id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
       user_id INT NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
       query_id TEXT NOT NULL,
       integration_type INTEGRATION_TYPE NOT NULL,
-      metadata JSONB NOT NULL,
-      is_login_method BOOLEAN NOT NULL
+      metadata JSONB NOT NULL
     );
   `)
 
@@ -15,13 +14,6 @@ const up = wrapInTransaction(async (client) => {
   await client.query(`
     CREATE UNIQUE INDEX integrations_user_id_query_id_idx
       ON integrations (user_id, query_id);
-  `)
-
-  // One integration cannot be used as login method for multiple users
-  await client.query(`
-    CREATE UNIQUE INDEX integrations_login_method_idx
-      ON integrations (integration_type, query_id)
-      WHERE is_login_method = TRUE;
   `)
 })
 

@@ -1,26 +1,13 @@
 const up = wrapInTransaction(async (client) => {
   await client.query(`
-    CREATE TABLE links (
-      id SERIAL PRIMARY KEY,
-      user_id INT NOT NULL REFERENCES users(id),
-      source_bucket_id INT NOT NULL REFERENCES buckets(id),
-      mirror_bucket_id INT NOT NULL REFERENCES buckets(id),
-      priority NUMERIC(6, 3) NOT NULL CHECK (priority >= 0),
-      template TEXT,
-      default_tags TEXT[],
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-  `)
-
-  await client.query(`
-    CREATE UNIQUE INDEX
-      ON links (user_id, source_bucket_id, mirror_bucket_id, template)
-      NULLS NOT DISTINCT;
+    CREATE TYPE LOGIN_METHOD_TYPE AS ENUM ('telegram');
   `)
 })
 
 const down = wrapInTransaction(async (client) => {
-  await client.query('DROP TABLE links;')
+  await client.query(`
+    DROP TYPE LOGIN_METHOD_TYPE;
+  `)
 })
 
 // -----------------------------------------------

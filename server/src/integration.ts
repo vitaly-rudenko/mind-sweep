@@ -1,6 +1,6 @@
 export type IntegrationType = 'telegram' | 'notion'
 
-type IntegrationMetadata = {
+export type IntegrationMetadata = {
   telegram: {
     userId: number
   }
@@ -17,14 +17,6 @@ export type Integration<T extends IntegrationType | unknown = unknown> = {
   queryId: string
   integrationType: T
   metadata: T extends IntegrationType ? IntegrationMetadata[T] : unknown
-  isLoginMethod: boolean
-}
-
-export type AuthIntegration<T extends IntegrationType> = {
-  userId: number
-  integrationId: number
-  integrationType: T
-  integrationQueryId: string
 }
 
 export type BucketType = 'telegram_chat' | 'notion_database'
@@ -38,7 +30,7 @@ type BucketMetadata = {
   }
 }
 
-export type Bucket<T extends BucketType> = {
+export type Bucket<T extends BucketType | unknown = unknown> = {
   id: number
   name: string
   userId: number
@@ -48,11 +40,29 @@ export type Bucket<T extends BucketType> = {
   integrationId: number
 }
 
+export type LoginMethodType = 'telegram'
+
+export type LoginMethodMetadata = {
+  telegram: {
+    userId: number
+  }
+}
+
+export type LoginMethod<T extends LoginMethodType | unknown = unknown> = {
+  id: number
+  userId: number
+  name: string
+  queryId: string
+  loginMethodType: T
+  metadata: T extends LoginMethodType ? LoginMethodMetadata[T] : unknown
+}
+
 export type Link = {
   id: number
   userId: number
-  fromBucketId: number
-  toBucketId: number
+  sourceBucketId: number
+  mirrorBucketId: number
+  priority: number
   template?: string
   defaultTags?: string[]
 }

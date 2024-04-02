@@ -2,12 +2,12 @@ const up = wrapInTransaction(async (client) => {
   await client.query(`
     CREATE TABLE buckets (
       id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
+      integration_id INT NOT NULL REFERENCES integrations(id),
       user_id INT NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
       query_id TEXT NOT NULL,
       bucket_type BUCKET_TYPE NOT NULL,
-      metadata JSONB NOT NULL,
-      integration_id INT NOT NULL REFERENCES integrations(id)
+      metadata JSONB NOT NULL
     )
   `)
 

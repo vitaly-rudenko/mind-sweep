@@ -1,26 +1,25 @@
 const up = wrapInTransaction(async (client) => {
   await client.query(`
-    CREATE TABLE links (
+    CREATE TABLE login_methods (
       id SERIAL PRIMARY KEY,
       user_id INT NOT NULL REFERENCES users(id),
-      source_bucket_id INT NOT NULL REFERENCES buckets(id),
-      mirror_bucket_id INT NOT NULL REFERENCES buckets(id),
-      priority NUMERIC(6, 3) NOT NULL CHECK (priority >= 0),
-      template TEXT,
-      default_tags TEXT[],
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      name TEXT NOT NULL,
+      query_id TEXT NOT NULL,
+      login_method_type LOGIN_METHOD_TYPE NOT NULL,
+      metadata JSONB NOT NULL
     );
   `)
 
   await client.query(`
-    CREATE UNIQUE INDEX
-      ON links (user_id, source_bucket_id, mirror_bucket_id, template)
-      NULLS NOT DISTINCT;
+    CREATE UNIQUE INDEX login_methods_login_method_type_query_id_idx
+      ON login_methods (login_method_type, query_id);
   `)
 })
 
 const down = wrapInTransaction(async (client) => {
-  await client.query('DROP TABLE links;')
+  await client.query(`
+    DROP TABLE login_methods;
+  `)
 })
 
 // -----------------------------------------------
