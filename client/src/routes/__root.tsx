@@ -2,16 +2,17 @@ import { Link, Outlet, createRootRoute } from '@tanstack/react-router'
 import { Toaster } from '@/components/sonner'
 import { ThemeProvider } from '@/theme/context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/button'
 import { WebAppProvider } from '@/web-app/context'
 import { AuthProvider } from '@/auth/context'
+import { useAuth } from '@/auth/hooks'
 
 export const Route = createRootRoute({
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      code: typeof search.code === 'string' ? search.code : undefined,
+      authToken: typeof search.auth_token === 'string' ? search.auth_token : undefined,
     }
   },
   component: RootComponent,
@@ -68,10 +69,23 @@ function RootComponent() {
             )}>
               <Outlet />
               <Toaster />
+              <CopyAuthLinkButton />
             </div>
           </AuthProvider>
         </WebAppProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )
+}
+
+const CopyAuthLinkButton: FC = () => {
+  const auth = useAuth()
+  if (!auth.authToken) return null
+
+  const url = new URL(window.location.origin)
+  const searchParams = new URLSearchParams()
+  searchParams.set('auth_token', auth.authToken)
+  url.hash = `/?${searchParams.toString()}`
+
+  return <input className='text-xs text-background pt-2 outline-none bg-transparent' type='text' readOnly value={url.toString()} />
 }

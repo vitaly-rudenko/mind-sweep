@@ -2,7 +2,7 @@ const up = wrapInTransaction(async (client) => {
   await client.query(`
     CREATE TABLE integrations (
       id SERIAL PRIMARY KEY,
-      user_id INT NOT NULL REFERENCES users(id),
+      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
       name TEXT NOT NULL,
       query_id TEXT NOT NULL,
       integration_type INTEGRATION_TYPE NOT NULL,

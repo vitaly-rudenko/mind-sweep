@@ -2,9 +2,9 @@ const up = wrapInTransaction(async (client) => {
   await client.query(`
     CREATE TABLE links (
       id SERIAL PRIMARY KEY,
-      user_id INT NOT NULL REFERENCES users(id),
-      source_bucket_id INT NOT NULL REFERENCES buckets(id),
-      mirror_bucket_id INT NOT NULL REFERENCES buckets(id),
+      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      source_bucket_id INT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      mirror_bucket_id INT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE ON UPDATE CASCADE,
       priority NUMERIC(6, 3) NOT NULL CHECK (priority >= 0),
       template TEXT,
       default_tags TEXT[],

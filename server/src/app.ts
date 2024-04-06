@@ -1,6 +1,7 @@
 import pg from 'pg'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
+import Router from 'express-promise-router'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -14,11 +15,13 @@ import { localize } from './localization/localize.js'
 import { withChatId } from './common/telegram.js'
 import { withLocale } from './localization/telegram.js'
 import { createWebAppUrlGenerator } from './web-app/utils.js'
-import { ApiError, NotFoundError } from './common/errors.js'
+import { ApiError, NotAuthenticatedError, NotFoundError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
+import type { Integration } from './types.js'
+import { Client } from '@notionhq/client'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -161,10 +164,16 @@ async function start() {
   }))
   app.use(express.json())
 
-  const authenticateWebAppSchema = z.object({ initData: z.string() })
-  const initDataUserSchema = z.object({ id: z.number() })
+  const router = Router()
 
-  app.post('/authenticate-web-app', async (req, res) => {
+  const authenticateWebAppSchema = z.object({ initData: z.string() })
+  const initDataUserSchema = z.object({
+    id: z.number(),
+    first_name: z.string(),
+    username: z.string().optional(),
+  })
+
+  router.post('/authenticate-web-app', async (req, res) => {
     const { initData } = authenticateWebAppSchema.parse(req.body)
 
     if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, initData)) {
@@ -192,6 +201,116 @@ async function start() {
       user,
     }, env.TOKEN_SECRET))
   })
+
+  const authTokenSchema = z.object({
+    user: z.object({
+      id: z.number(),
+      name: z.string(),
+      locale: z.string(),
+    })
+  })
+
+  function createAuthMiddleware(input: { tokenSecret: string }) {
+    return (req: Request, _res: Response, next: NextFunction) => {
+      const token = req.headers['authorization']?.slice(7) // 'Bearer ' length
+      if (!token) {
+        throw new NotAuthenticatedError('Authentication token not provided')
+      }
+
+      try {
+        req.user = authTokenSchema.parse(jwt.verify(token, input.tokenSecret)).user
+      } catch (err) {
+        logger.warn({ err }, 'Invalid authentication token')
+        throw new NotAuthenticatedError('Invalid authentication token')
+      }
+
+      next()
+    }
+  }
+
+  router.use(createAuthMiddleware({ tokenSecret: env.TOKEN_SECRET }))
+
+  const createIntegrationSchema = z.discriminatedUnion('integrationType', [
+    z.object({
+      integrationType: z.literal('notion'),
+      name: z.string().optional(),
+      metadata: z.object({
+        integrationSecret: z.string().min(1),
+      })
+    }),
+    z.object({
+      integrationType: z.literal('telegram'),
+      name: z.string().optional(),
+      metadata: z.object({
+        initData: z.string().min(1),
+      })
+    })
+  ]);
+
+  router.post('/integrations', async (req, res) => {
+    const input = createIntegrationSchema.parse(req.body)
+
+    if (input.integrationType === 'notion') {
+      const notion = new Client({ auth: input.metadata.integrationSecret });
+      const notionUser = await notion.users.me({});
+
+      await storage.createIntegration({
+        integrationType: 'notion',
+        name: input.name || notionUser.name || 'Notion',
+        userId: req.user.id,
+        queryId: notionUser.id,
+        metadata: {
+          userId: notionUser.id,
+          integrationSecret: input.metadata.integrationSecret,
+        }
+      })
+    } else if (input.integrationType === 'telegram') {
+      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
+        throw new ApiError({
+          code: 'INVALID_SIGNATURE',
+          status: 400,
+        })
+      }
+
+      const initDataUser = new URLSearchParams(input.metadata.initData).get('user')
+      const telegramUser = initDataUser ? initDataUserSchema.parse(JSON.parse(initDataUser)) : undefined
+      if (!telegramUser) {
+        throw new ApiError({
+          code: 'INVALID_INIT_DATA',
+          status: 400,
+        })
+      }
+
+      await storage.createIntegration({
+        integrationType: 'telegram',
+        name: input.name || formatTelegramUserName(telegramUser),
+        userId: req.user.id,
+        queryId: String(telegramUser.id),
+        metadata: {
+          userId: telegramUser.id,
+        }
+      })
+    } else {
+      throw new ApiError({
+        code: 'UNSUPPORTED_INTEGRATION_TYPE',
+        status: 400,
+      })
+    }
+
+    res.sendStatus(201)
+  })
+
+  router.get('/integrations', async (req, res) => {
+    const integrations = await storage.getIntegrationsByUserId(req.user.id)
+    res.json({ items: integrations })
+  })
+
+  router.delete('/integrations/:id', async (req, res) => {
+    await storage.deleteIntegrationById(req.user.id, Number(req.params.id))
+    res.sendStatus(204)
+  })
+
+  app.use(router)
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     // TODO: test "err instanceof ZodError"

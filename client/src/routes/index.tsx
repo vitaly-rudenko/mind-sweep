@@ -5,5 +5,5 @@ export const Route = createFileRoute('/')({
 })
 
 function Component() {
-  return <Navigate to='/links' />
+  return <Navigate to='/integrations' />
 }

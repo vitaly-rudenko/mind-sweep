@@ -29,11 +29,11 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [initialized, setInitialized] = useState(false)
   const [authToken, setAuthToken] = useState<string>()
   const [currentUser, setCurrentUser] = useState<User>()
-  const { code } = useSearch({ strict: false })
+  const search = useSearch({ strict: false })
 
   useEffect(() => {
     (async () => {
-      let authToken = localStorage.getItem('auth_token') || undefined
+      let authToken = localStorage.getItem('auth_token') || search.authToken || undefined
 
       if (!authToken) {
         if (webApp?.initData) {
@@ -43,13 +43,8 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
           } catch (error) {
             console.warn(error)
           }
-        } else if (code) {
-          console.debug('Exchanging code with auth token')
-          try {
-            authToken = await authenticate({ code })
-          } catch (error) {
-            console.warn(error)
-          }
+        } else {
+          console.error('webApp.initData is not set, could not authenticate the user')
         }
       }
 
@@ -71,7 +66,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
       setInitialized(true)
     })()
-  }, [code, webApp?.initData])
+  }, [search.authToken, webApp?.initData])
 
   const logOut = useCallback(async () => {
     setAuthToken(undefined)

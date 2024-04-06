@@ -14,6 +14,7 @@ import { Route as rootRoute } from './routes/__root'
 import { Route as IndexImport } from './routes/index'
 import { Route as NotesIndexImport } from './routes/notes/index'
 import { Route as LinksIndexImport } from './routes/links/index'
+import { Route as IntegrationsIndexImport } from './routes/integrations/index'
 
 // Create/Update Routes
 
@@ -32,12 +33,21 @@ const LinksIndexRoute = LinksIndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const IntegrationsIndexRoute = IntegrationsIndexImport.update({
+  path: '/integrations/',
+  getParentRoute: () => rootRoute,
+} as any)
+
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/': {
       preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/integrations/': {
+      preLoaderRoute: typeof IntegrationsIndexImport
       parentRoute: typeof rootRoute
     }
     '/links/': {
@@ -55,6 +65,7 @@ declare module '@tanstack/react-router' {
 
 export const routeTree = rootRoute.addChildren([
   IndexRoute,
+  IntegrationsIndexRoute,
   LinksIndexRoute,
   NotesIndexRoute,
 ])

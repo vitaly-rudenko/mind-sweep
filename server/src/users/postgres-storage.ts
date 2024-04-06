@@ -1,6 +1,7 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../integration.js'
+import type { Bucket, BucketType, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
+import { AlreadyExistsError } from '../common/errors.js'
 
 type UserRow = {
   id: number
@@ -116,5 +117,51 @@ export class PostgresStorage {
       name: rows[0].name,
       locale: rows[0].locale,
     } : undefined
+  }
+
+  async createIntegration<I extends IntegrationType>(integration: Omit<Integration<I>, 'id'>): Promise<Integration<I>> {
+    try {
+      const { rows: [{ id }] } = await this.client.query<IntegrationRow<I>>(`
+        INSERT INTO integrations (user_id, name, query_id, integration_type, metadata)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id;
+      `, [integration.userId, integration.name, integration.queryId, integration.integrationType, integration.metadata])
+
+      return {
+        id,
+        userId: integration.userId,
+        name: integration.name,
+        queryId: integration.queryId,
+        integrationType: integration.integrationType,
+        metadata: integration.metadata,
+      }
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
+        throw new AlreadyExistsError('Integration already exists')
+      }
+
+      throw err
+    }
+  }
+
+  async getIntegrationsByUserId<I extends IntegrationType>(userId: number): Promise<Integration<I>[]> {
+    const { rows } = await this.client.query<IntegrationRow<I>>(`
+      SELECT id, user_id, name, query_id, integration_type, metadata
+      FROM integrations
+      WHERE user_id = $1;
+    `, [userId])
+
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      queryId: row.query_id,
+      integrationType: row.integration_type,
+      metadata: row.metadata,
+    }))
+  }
+
+  async deleteIntegrationById(userId: number, integrationId: number): Promise<void> {
+    await this.client.query('DELETE FROM integrations WHERE user_id = $1 AND id = $2;', [userId, integrationId])
   }
 }
