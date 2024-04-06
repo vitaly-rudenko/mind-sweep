@@ -46,6 +46,7 @@ const envSchema = z.object({
   WEB_APP_URL: urlSchema,
   WEB_APP_NAME: stringSchema,
   CORS_ORIGIN: urlArraySchema,
+  TOKEN_SECRET: stringSchema,
 })
 
 export const env = envSchema.parse(process.env)

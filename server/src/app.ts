@@ -1,6 +1,6 @@
-import fs from 'fs'
-import https from 'https'
 import pg from 'pg'
+import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -14,9 +14,9 @@ import { localize } from './localization/localize.js'
 import { withChatId } from './common/telegram.js'
 import { withLocale } from './localization/telegram.js'
 import { createWebAppUrlGenerator } from './web-app/utils.js'
-import { ApiError } from './common/errors.js'
+import { ApiError, NotFoundError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
-import { ZodError } from 'zod'
+import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
 
@@ -140,6 +140,10 @@ async function start() {
     return next()
   })
 
+  bot.command('app', async (context) => {
+    await context.reply(generateWebAppUrl())
+  })
+
   const app = express()
   app.use(helmet({
     crossOriginResourcePolicy: {
@@ -156,6 +160,38 @@ async function start() {
     }
   }))
   app.use(express.json())
+
+  const authenticateWebAppSchema = z.object({ initData: z.string() })
+  const initDataUserSchema = z.object({ id: z.number() })
+
+  app.post('/authenticate-web-app', async (req, res) => {
+    const { initData } = authenticateWebAppSchema.parse(req.body)
+
+    if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, initData)) {
+      throw new ApiError({
+        code: 'INVALID_SIGNATURE',
+        status: 400,
+      })
+    }
+
+    const initDataUser = new URLSearchParams(initData).get('user')
+    const telegramUser = initDataUser ? initDataUserSchema.parse(JSON.parse(initDataUser)) : undefined
+    if (!telegramUser) {
+      throw new ApiError({
+        code: 'INVALID_INIT_DATA',
+        status: 400,
+      })
+    }
+
+    const user = await storage.getUserByLoginMethod('telegram', String(telegramUser.id))
+    if (!user) {
+      throw new NotFoundError()
+    }
+
+    res.json(jwt.sign({
+      user,
+    }, env.TOKEN_SECRET))
+  })
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     // TODO: test "err instanceof ZodError"
@@ -210,8 +246,8 @@ async function start() {
     }, 'Unhandled telegram error')
   })
 
-    logger.info({}, 'Starting server')
-    await new Promise(resolve => app.listen(env.PORT, () => resolve(undefined)))
+  logger.info({}, 'Starting server')
+  await new Promise(resolve => app.listen(env.PORT, () => resolve(undefined)))
 
   logger.info({}, 'Starting telegram bot')
   bot.launch({
@@ -220,6 +256,26 @@ async function start() {
     logger.fatal({ err }, 'Could not launch telegram bot')
     process.exit(1)
   })
+}
+
+// https://gist.github.com/konstantin24121/49da5d8023532d66cc4db1136435a885?permalink_comment_id=4574538#gistcomment-4574538
+function checkWebAppSignature(botToken: string, initData: string) {
+  const urlParams = new URLSearchParams(initData)
+
+  const hash = urlParams.get('hash')
+  urlParams.delete('hash')
+  urlParams.sort()
+
+  let dataCheckString = ''
+  for (const [key, value] of urlParams.entries()) {
+      dataCheckString += `${key}=${value}\n`
+  }
+  dataCheckString = dataCheckString.slice(0, -1)
+
+  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken)
+  const calculatedHash = crypto.createHmac('sha256', secret.digest()).update(dataCheckString).digest('hex')
+
+  return calculatedHash === hash
 }
 
 start()
