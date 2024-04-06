@@ -127,14 +127,7 @@ export class PostgresStorage {
         RETURNING id;
       `, [integration.userId, integration.name, integration.queryId, integration.integrationType, integration.metadata])
 
-      return {
-        id,
-        userId: integration.userId,
-        name: integration.name,
-        queryId: integration.queryId,
-        integrationType: integration.integrationType,
-        metadata: integration.metadata,
-      }
+      return { id, ...integration }
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
         throw new AlreadyExistsError('Integration already exists')
@@ -161,7 +154,64 @@ export class PostgresStorage {
     }))
   }
 
+  async getIntegrationById<I extends IntegrationType>(userId: number, integrationId: number): Promise<Integration<I> | undefined> {
+    const { rows } = await this.client.query<IntegrationRow<I>>(`
+      SELECT id, user_id, name, query_id, integration_type, metadata
+      FROM integrations
+      WHERE user_id = $1 AND id = $2;
+    `, [userId, integrationId])
+
+    return rows[0] ? {
+      id: rows[0].id,
+      userId: rows[0].user_id,
+      name: rows[0].name,
+      queryId: rows[0].query_id,
+      integrationType: rows[0].integration_type,
+      metadata: rows[0].metadata,
+    } : undefined
+  }
+
   async deleteIntegrationById(userId: number, integrationId: number): Promise<void> {
     await this.client.query('DELETE FROM integrations WHERE user_id = $1 AND id = $2;', [userId, integrationId])
+  }
+
+  async createBucket<I extends BucketType>(bucket: Omit<Bucket<I>, 'id'>): Promise<Bucket<I>> {
+    try {
+      const { rows: [{ id }] } = await this.client.query<BucketRow<I>>(`
+        INSERT INTO buckets (user_id, name, query_id, bucket_type, metadata, integration_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id;
+      `, [bucket.userId, bucket.name, bucket.queryId, bucket.bucketType, bucket.metadata, bucket.integrationId])
+
+      return { id, ...bucket }
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
+        throw new AlreadyExistsError('Bucket already exists')
+      }
+
+      throw err
+    }
+  }
+
+  async getBucketsByUserId<I extends BucketType>(userId: number): Promise<Bucket<I>[]> {
+    const { rows } = await this.client.query<BucketRow<I>>(`
+      SELECT id, user_id, name, query_id, bucket_type, metadata, integration_id
+      FROM buckets
+      WHERE user_id = $1;
+    `, [userId])
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      userId: row.user_id,
+      queryId: row.query_id,
+      bucketType: row.bucket_type,
+      metadata: row.metadata,
+      integrationId: row.integration_id,
+    }))
+  }
+
+  async deleteBucketById(userId: number, bucketId: number): Promise<void> {
+    await this.client.query('DELETE FROM buckets WHERE user_id = $1 AND id = $2;', [userId, bucketId])
   }
 }

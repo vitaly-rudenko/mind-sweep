@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/card'
 import { ArrowRight } from 'lucide-react'
 import type { FC } from 'react'
-import { BucketCombobox } from './bucket-combobox'
+import { BucketCombobox } from '../buckets/bucket-combobox'
 
 export const Links: FC = () => {
   return <div className='flex flex-col gap-2'>

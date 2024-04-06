@@ -1,19 +1,19 @@
 import { Button } from '@/components/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/card'
 import { useEffect, useState, type FC } from 'react'
-import { IntegrationEditor } from './integration-editor'
-import { useDeleteIntegrationMutation, useIntegrationsQuery } from './api'
-import type { Integration } from '@/types'
+import { BucketEditor } from './bucket-editor'
+import { useDeleteBucketMutation, useBucketsQuery } from './api'
+import type { Bucket } from '@/types'
 import { createToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
 
-export const Integrations: FC = () => {
-  const { data, refetch } = useIntegrationsQuery()
+export const Buckets: FC = () => {
+  const { data, refetch } = useBucketsQuery()
 
   const [deleteId, setDeleteId] = useState<number>()
-  const deleteMutation = useDeleteIntegrationMutation()
+  const deleteMutation = useDeleteBucketMutation()
 
   const [editorOpen, setEditorOpen] = useState(false)
 
@@ -25,17 +25,17 @@ export const Integrations: FC = () => {
 
   useEffect(() => {
     if (deleteMutation.isSuccess) {
-      createToast('Integration has been deleted', { type: 'success' })
+      createToast('Bucket has been deleted', { type: 'success' })
       setDeleteId(undefined)
       refetch()
     }
   }, [deleteMutation.isSuccess, refetch])
 
   return <>
-    <IntegrationEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
+    <BucketEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
 
     <Alert
-      title='Delete  Integration?'
+      title='Delete  Bucket?'
       confirm='Yes, delete it'
       disabled={deleteMutation.isPending}
       open={deleteId !== undefined}
@@ -45,22 +45,22 @@ export const Integrations: FC = () => {
 
     <div className='flex flex-col gap-2'>
       <div className='flex justify-between items-baseline'>
-        <div className='text-xl font-medium'>Integrations</div>
-        <Button variant='link' onClick={() => setEditorOpen(true)} className='pr-0'>Add Integration</Button>
+        <div className='text-xl font-medium'>Buckets</div>
+        <Button variant='link' onClick={() => setEditorOpen(true)} className='pr-0'>Add Bucket</Button>
       </div>
       <div className='flex flex-col gap-2'>
-        {!!data && data.items.map((integration) => (
-          <Integration key={integration.id} integration={integration} onDelete={() => setDeleteId(integration.id)} />
+        {!!data && data.items.map((bucket) => (
+          <Bucket key={bucket.id} bucket={bucket} onDelete={() => setDeleteId(bucket.id)} />
         ))}
       </div>
     </div>
   </>
 }
 
-const Integration: FC<{
-  integration: Integration
+const Bucket: FC<{
+  bucket: Bucket
   onDelete: () => void
-}> = ({ integration, onDelete }) => {
+}> = ({ bucket, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <Card className={cn(
@@ -69,8 +69,8 @@ const Integration: FC<{
   )}>
     <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
       <CardTitle className='flex items-baseline gap-2'>
-        <div>{integration.name}</div>
-        <CardDescription>{integration.integrationType === 'telegram' ? 'Telegram' : 'Notion'}</CardDescription>
+        <div>{bucket.name}</div>
+        <CardDescription>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
       </CardTitle>
     </CardHeader>
     <div className={cn('transition-[height]', expanded ? 'h-10' : 'h-0')}>
