@@ -86,32 +86,47 @@ const BucketComponent: FC<{
   )}>
     <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
       <CardTitle className='flex items-baseline gap-2'>
-        <div>{bucket.name}</div>
-        <CardDescription>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
+        <div className='truncate'>{bucket.name}</div>
+        <CardDescription className='whitespace-nowrap'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
       </CardTitle>
     </CardHeader>
-    <CardContent>
+    <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
+      <Separator />
+      <CardFooter className='flex flex-row items-stretch p-0 h-full'>
+        <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
+      </CardFooter>
+    </div>
+    <CardContent className={cn('transition-opacity', expanded && 'opacity-50')}>
       <div className='flex flex-col gap-2'>
         {bucket.sourceLinks.map((link) => {
           const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
-          return <div className='flex items-center gap-2'>
-            <ArrowRight className='inline size-6' />
-            <div>{sourceBucket?.name}</div>
+          if (!sourceBucket) return null
+
+          return <div className='flex flex-row items-center gap-2'>
+            <ArrowRight className='inline size-6 shrink-0' />
+            <Card className='grow overflow-hidden pb-4 shadow-none border-0 bg-secondary'>
+              <CardHeader className='pb-0'>
+                <CardTitle className='flex items-baseline gap-2'>
+                  <div className='truncate'>{sourceBucket.name}</div>
+                  <CardDescription className='whitespace-nowrap'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
+                </CardTitle>
+              </CardHeader>
+              {!!(link.template || link.defaultTags) && (
+                <CardContent className='pb-0'>
+                  {!!link.template && <div className='text-sm font-mono'>{link.template}</div>}
+                  {!!link.defaultTags && <div className='text-sm'>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</div>}
+                </CardContent>
+              )}
+            </Card>
           </div>
         })}
         <div className='flex items-center gap-2'>
-          <ArrowRight className='inline size-6' />
+          <ArrowRight className='inline size-6 shrink-0' />
           <Button variant='link' role='combobox' className='p-0 justify-between h-auto' onClick={onLink}>
             Link to...
           </Button>
         </div>
       </div>
     </CardContent>
-    <div className={cn('transition-[height]', expanded ? 'h-10' : 'h-0')}>
-      <Separator />
-      <CardFooter className='flex flex-row items-stretch p-0 h-full'>
-        <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
-      </CardFooter>
-    </div>
   </Card>
 }

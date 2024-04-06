@@ -17,13 +17,14 @@ import { ApiError } from '@/utils/api'
 import type { Bucket } from '@/types'
 import { BucketCombobox } from './bucket-combobox'
 import { ArrowDown } from 'lucide-react'
+import { Input } from '@/components/input'
 
 type FormState = {
   sourceBucket: Bucket | ''
   mirrorBucket: Bucket | ''
   priority: number
   template: string
-  defaultTags: string[]
+  defaultTags: string
 }
 
 const defaultValues: FormState = {
@@ -31,7 +32,7 @@ const defaultValues: FormState = {
   mirrorBucket: '',
   priority: 0,
   template: '',
-  defaultTags: [],
+  defaultTags: '',
 }
 
 export const LinkEditor: FC<{
@@ -52,12 +53,14 @@ export const LinkEditor: FC<{
     const toastId = createToast('Adding Link...', { type: 'loading' })
 
     try {
+      const defaultTags = formState.defaultTags.split(',').map((tag) => tag.trim()).filter(Boolean)
+
       await createMutation.mutateAsync({
         sourceBucketId: formState.sourceBucket.id,
         mirrorBucketId: formState.mirrorBucket.id,
         priority: formState.priority,
         template: formState.template || undefined,
-        defaultTags: formState.defaultTags.length > 0 ? formState.defaultTags : undefined,
+        defaultTags: defaultTags.length > 0 ? defaultTags : undefined,
       })
 
       createToast('Link has been saved', { type: 'success', toastId })
@@ -129,6 +132,34 @@ export const LinkEditor: FC<{
                         placeholder='Select source bucket'
                         selected={field.value !== '' ? field.value : undefined}
                         onSelect={(bucket) => form.setValue('sourceBucket', bucket ?? '')}
+                      />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='template'
+                  render={({ field }) => (
+                    <FormItem>
+                      <Input
+                        {...field}
+                        placeholder='Template (optional)'
+                        type='text'
+                      />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='defaultTags'
+                  render={({ field }) => (
+                    <FormItem>
+                      <Input
+                        {...field}
+                        placeholder='Default tags (optional)'
+                        type='text'
                       />
                     </FormItem>
                   )}

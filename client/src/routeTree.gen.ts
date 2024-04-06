@@ -13,7 +13,6 @@
 import { Route as rootRoute } from './routes/__root'
 import { Route as IndexImport } from './routes/index'
 import { Route as NotesIndexImport } from './routes/notes/index'
-import { Route as LinksIndexImport } from './routes/links/index'
 import { Route as IntegrationsIndexImport } from './routes/integrations/index'
 import { Route as BucketsIndexImport } from './routes/buckets/index'
 
@@ -26,11 +25,6 @@ const IndexRoute = IndexImport.update({
 
 const NotesIndexRoute = NotesIndexImport.update({
   path: '/notes/',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const LinksIndexRoute = LinksIndexImport.update({
-  path: '/links/',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -60,10 +54,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IntegrationsIndexImport
       parentRoute: typeof rootRoute
     }
-    '/links/': {
-      preLoaderRoute: typeof LinksIndexImport
-      parentRoute: typeof rootRoute
-    }
     '/notes/': {
       preLoaderRoute: typeof NotesIndexImport
       parentRoute: typeof rootRoute
@@ -77,7 +67,6 @@ export const routeTree = rootRoute.addChildren([
   IndexRoute,
   BucketsIndexRoute,
   IntegrationsIndexRoute,
-  LinksIndexRoute,
   NotesIndexRoute,
 ])
 

@@ -11,7 +11,6 @@ import { Moon, MoonStar, Sun, SunDim } from 'lucide-react'
 const routes = [
   { name: 'Integrations', route: '/integrations' },
   { name: 'Buckets', route: '/buckets' },
-  { name: 'Links', route: '/links' },
 ] as const
 
 function getTimeOfTheDay() {
