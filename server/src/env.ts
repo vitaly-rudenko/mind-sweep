@@ -38,7 +38,6 @@ const envSchema = z.object({
   PORT: numberSchema,
   LOG_LEVEL: logLevelSchema,
   USE_TEST_MODE: optionalBooleanSchema,
-  ENABLE_TEST_HTTPS: optionalBooleanSchema,
   REDIS_URL: urlSchema,
   DATABASE_URL: urlSchema,
   LOG_DATABASE_QUERIES: optionalBooleanSchema,

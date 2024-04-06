@@ -45,7 +45,7 @@ async function start() {
     throw new Error('Telegram bot token is not defined')
   }
 
-  const bot = new Telegraf(telegramBotToken)
+  const bot = new Telegraf(telegramBotToken, { telegram: { testEnv: env.USE_TEST_MODE } })
 
   process.once('SIGINT', () => bot.stop('SIGINT'))
   process.once('SIGTERM', () => bot.stop('SIGTERM'))
@@ -210,18 +210,8 @@ async function start() {
     }, 'Unhandled telegram error')
   })
 
-  if (env.ENABLE_TEST_HTTPS) {
-    logger.warn({}, 'Starting server in test HTTPS mode')
-    // https://stackoverflow.com/a/69743888
-    const key = fs.readFileSync('./.cert/key.pem', 'utf-8')
-    const cert = fs.readFileSync('./.cert/cert.pem', 'utf-8')
-    await new Promise(resolve => {
-      https.createServer({ key, cert }, app).listen(env.PORT, () => resolve(undefined))
-    })
-  } else {
     logger.info({}, 'Starting server')
     await new Promise(resolve => app.listen(env.PORT, () => resolve(undefined)))
-  }
 
   logger.info({}, 'Starting telegram bot')
   bot.launch({
