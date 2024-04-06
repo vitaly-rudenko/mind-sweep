@@ -20,16 +20,19 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@tanstack/react-query": "^5.28.4",
     "@tanstack/react-router": "^1.20.1",
+    "@types/telegram-web-app": "^7.2.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
+    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.364.0",
     "next-themes": "^0.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sonner": "^1.4.3",
     "tailwind-merge": "^2.2.2",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@tanstack/router-vite-plugin": "^1.20.0",
@@ -40,6 +43,7 @@
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.18",
+    "concurrently": "^8.2.2",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",

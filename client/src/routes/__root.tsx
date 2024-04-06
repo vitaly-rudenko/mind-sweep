@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/button'
+import { WebAppProvider } from '@/web-app/context'
+import { AuthProvider } from '@/auth/context'
 
 export const Route = createRootRoute({
   validateSearch: (search: Record<string, unknown>) => {
@@ -58,13 +60,17 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <div className={cn(
-          'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[34rem]',
-          focusedOnInput && 'pb-[50vh]',
-        )}>
-          <Outlet />
-          <Toaster />
-        </div>
+        <WebAppProvider>
+          <AuthProvider>
+            <div className={cn(
+              'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[34rem]',
+              focusedOnInput && 'pb-[50vh]',
+            )}>
+              <Outlet />
+              <Toaster />
+            </div>
+          </AuthProvider>
+        </WebAppProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

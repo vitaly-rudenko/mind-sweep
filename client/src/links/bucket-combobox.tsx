@@ -1,5 +1,5 @@
 import { type FC, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/command'
