@@ -8,6 +8,7 @@ import { Button } from '@/components/button'
 import { WebAppProvider } from '@/web-app/context'
 import { AuthProvider } from '@/auth/context'
 import { useAuth } from '@/auth/hooks'
+import { Navigation } from '@/navigation/navigation'
 
 export const Route = createRootRoute({
   validateSearch: (search: Record<string, unknown>) => {
@@ -67,6 +68,7 @@ function RootComponent() {
               'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[34rem]',
               focusedOnInput && 'pb-[50vh]',
             )}>
+              <Navigation />
               <Outlet />
               <Toaster />
               <CopyAuthLinkButton />
