@@ -1,5 +1,5 @@
 import { useRequiredAuth } from '@/auth/hooks'
-import type { Bucket } from '@/types'
+import type { Bucket, Link } from '@/types'
 import { authorizationHeaders, callApi } from '@/utils/api'
 import { useMutation, useQuery } from '@tanstack/react-query'
 
@@ -17,7 +17,7 @@ export const useBucketsQuery = () => {
       const json = await response.json() as { items: unknown[] }
 
       return {
-        items: json.items.map(deserialize),
+        items: json.items as (Bucket & { sourceLinks: Link[] })[],
       }
     }
   })
@@ -61,16 +61,27 @@ export const useDeleteBucketMutation = () => {
   })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deserialize(raw: any): Bucket {
-  return {
-    id: raw.id,
-    name: raw.name,
-    userId: raw.userId,
-    queryId: raw.queryId,
-    bucketType: raw.bucketType,
-    metadata: raw.metadata,
-    integrationId: raw.integrationId,
-  }
+type CreateLinkInput = {
+  sourceBucketId: number
+  mirrorBucketId: number
+  priority: number
+  template?: string
+  defaultTags?: string[]
 }
 
+export const useCreateLinkMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (input: CreateLinkInput) => {
+      await callApi('/links', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authorizationHeaders(authToken),
+        },
+        body: JSON.stringify(input),
+      })
+    }
+  })
+}

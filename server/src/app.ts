@@ -374,7 +374,7 @@ async function start() {
       await storage.createBucket({
         integrationId: input.integrationId,
         bucketType: 'telegram_chat',
-        name: input.name || formatTelegramUserName(telegramUser),
+        name: input.name || formatTelegramUserName(botInfo),
         userId: req.user.id,
         queryId: String(telegramUser.id),
         metadata: {
@@ -397,6 +397,34 @@ async function start() {
   })
 
   router.delete('/buckets/:id', async (req, res) => {
+    await storage.deleteBucketById(req.user.id, Number(req.params.id))
+    res.sendStatus(204)
+  })
+
+  const createLinkSchema = z.object({
+    sourceBucketId: z.number(),
+    mirrorBucketId: z.number(),
+    priority: z.number().min(0).max(100),
+    template: z.string().min(1).optional(),
+    defaultTags: z.array(z.string().min(1)).min(1).optional(),
+  })
+
+  router.post('/links', async (req, res) => {
+    const input = createLinkSchema.parse(req.body)
+
+    await storage.createLink({
+      userId: req.user.id,
+      sourceBucketId: input.sourceBucketId,
+      mirrorBucketId: input.mirrorBucketId,
+      priority: input.priority,
+      template: input.template,
+      defaultTags: input.defaultTags,
+    })
+
+    res.sendStatus(201)
+  })
+
+  router.delete('/links/:id', async (req, res) => {
     await storage.deleteBucketById(req.user.id, Number(req.params.id))
     res.sendStatus(204)
   })
@@ -435,9 +463,12 @@ async function start() {
         }
       })
     } else if (err instanceof ZodError) {
-      // TODO: test "err instanceof ZodError"
-      // TODO: return errors to FE
-      res.sendStatus(400)
+      res.status(422).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          context: err.errors,
+        }
+      })
     } else {
       res.sendStatus(500)
     }

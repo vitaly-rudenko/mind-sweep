@@ -1,13 +1,15 @@
 import { Button } from '@/components/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter, CardContent } from '@/components/card'
 import { useEffect, useState, type FC } from 'react'
 import { BucketEditor } from './bucket-editor'
 import { useDeleteBucketMutation, useBucketsQuery } from './api'
-import type { Bucket } from '@/types'
+import type { Bucket, Bucket as BucketComponent } from '@/types'
 import { createToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
+import { ArrowRight } from 'lucide-react'
+import { LinkEditor } from './link-editor'
 
 export const Buckets: FC = () => {
   const { data, refetch } = useBucketsQuery()
@@ -16,12 +18,19 @@ export const Buckets: FC = () => {
   const deleteMutation = useDeleteBucketMutation()
 
   const [editorOpen, setEditorOpen] = useState(false)
+  const [selectedBucket, setSelectedBucket] = useState<Bucket>()
 
   useEffect(() => {
     if (!editorOpen) {
       refetch()
     }
   }, [editorOpen, refetch])
+
+  useEffect(() => {
+    if (!selectedBucket) {
+      refetch()
+    }
+  }, [selectedBucket, refetch])
 
   useEffect(() => {
     if (deleteMutation.isSuccess) {
@@ -33,6 +42,7 @@ export const Buckets: FC = () => {
 
   return <>
     <BucketEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
+    <LinkEditor mirrorBucket={selectedBucket} open={!!selectedBucket} onClose={() => setSelectedBucket(undefined)} />
 
     <Alert
       title='Delete  Bucket?'
@@ -50,17 +60,24 @@ export const Buckets: FC = () => {
       </div>
       <div className='flex flex-col gap-2'>
         {!!data && data.items.map((bucket) => (
-          <Bucket key={bucket.id} bucket={bucket} onDelete={() => setDeleteId(bucket.id)} />
+          <BucketComponent key={bucket.id}
+            buckets={data.items}
+            bucket={bucket}
+            onLink={() => setSelectedBucket(bucket)}
+            onDelete={() => setDeleteId(bucket.id)}
+          />
         ))}
       </div>
     </div>
   </>
 }
 
-const Bucket: FC<{
+const BucketComponent: FC<{
+  buckets: Bucket[]
   bucket: Bucket
+  onLink: () => void
   onDelete: () => void
-}> = ({ bucket, onDelete }) => {
+}> = ({ buckets, bucket, onLink, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <Card className={cn(
@@ -73,6 +90,23 @@ const Bucket: FC<{
         <CardDescription>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
       </CardTitle>
     </CardHeader>
+    <CardContent>
+      <div className='flex flex-col gap-2'>
+        {bucket.sourceLinks.map((link) => {
+          const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
+          return <div className='flex items-center gap-2'>
+            <ArrowRight className='inline size-6' />
+            <div>{sourceBucket?.name}</div>
+          </div>
+        })}
+        <div className='flex items-center gap-2'>
+          <ArrowRight className='inline size-6' />
+          <Button variant='link' role='combobox' className='p-0 justify-between h-auto' onClick={onLink}>
+            Link to...
+          </Button>
+        </div>
+      </div>
+    </CardContent>
     <div className={cn('transition-[height]', expanded ? 'h-10' : 'h-0')}>
       <Separator />
       <CardFooter className='flex flex-row items-stretch p-0 h-full'>

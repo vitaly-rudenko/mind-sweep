@@ -5,10 +5,11 @@ const up = wrapInTransaction(async (client) => {
       user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
       source_bucket_id INT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE ON UPDATE CASCADE,
       mirror_bucket_id INT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE ON UPDATE CASCADE,
-      priority NUMERIC(6, 3) NOT NULL CHECK (priority >= 0),
+      priority NUMERIC(5, 2) NOT NULL CHECK (priority >= 0),
       template TEXT,
       default_tags TEXT[],
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      CHECK (source_bucket_id <> mirror_bucket_id)
     );
   `)
 

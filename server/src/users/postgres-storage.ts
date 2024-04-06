@@ -1,7 +1,7 @@
 import { type Client } from 'pg'
 import type { Bucket, BucketType, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
-import { AlreadyExistsError } from '../common/errors.js'
+import { AlreadyExistsError, ApiError } from '../common/errors.js'
 
 type UserRow = {
   id: number
@@ -26,6 +26,7 @@ type BucketRow<T extends BucketType | unknown = unknown> = {
   bucket_type: T
   metadata: Bucket<T>['metadata']
   integration_id: number
+  source_links: LinkRow[]
 }
 
 type LoginMethodRow<T extends LoginMethodType | unknown = unknown> = {
@@ -50,11 +51,26 @@ type LinkRow = {
 export class PostgresStorage {
   constructor(private readonly client: Client) {}
 
-  async createLink(link: Omit<Link, 'id'>): Promise<void> {
-    await this.client.query<LinkRow>(`
-      INSERT INTO links (user_id, source_bucket_id, mirror_bucket_id, template, priority, default_tags)
-      VALUES ($1, $2, $3, $4, $5);
-    `, [link.userId, link.sourceBucketId, link.mirrorBucketId, link.priority, link.template, link.defaultTags])
+  async createLink(link: Omit<Link, 'id'>): Promise<Link> {
+    try {
+      const { rows: [{ id }] } = await this.client.query<LinkRow>(`
+        INSERT INTO links (user_id, source_bucket_id, mirror_bucket_id, priority, template, default_tags)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id;
+      `, [link.userId, link.sourceBucketId, link.mirrorBucketId, link.priority, link.template, link.defaultTags])
+
+      return { id, ...link }
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        if (err.code === '23505') {
+          throw new AlreadyExistsError()
+        } else if (err.code === '23514') {
+          throw new ApiError({ code: 'INVALID_LINK', status: 400 })
+        }
+      }
+
+      throw err
+    }
   }
 
   async createUserWithIntegration<I extends IntegrationType, B extends BucketType>(
@@ -193,11 +209,14 @@ export class PostgresStorage {
     }
   }
 
-  async getBucketsByUserId<I extends BucketType>(userId: number): Promise<Bucket<I>[]> {
+  async getBucketsByUserId<I extends BucketType>(userId: number): Promise<(Bucket<I> & { sourceLinks: Link[] })[]> {
     const { rows } = await this.client.query<BucketRow<I>>(`
-      SELECT id, user_id, name, query_id, bucket_type, metadata, integration_id
-      FROM buckets
-      WHERE user_id = $1;
+      SELECT b.id, b.user_id, b.name, b.query_id, b.bucket_type, b.metadata, b.integration_id
+        , COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
+      FROM buckets b
+      LEFT JOIN links l ON l.mirror_bucket_id = b.id
+      WHERE b.user_id = $1
+      GROUP BY b.id;
     `, [userId])
 
     return rows.map((row) => ({
@@ -208,6 +227,15 @@ export class PostgresStorage {
       bucketType: row.bucket_type,
       metadata: row.metadata,
       integrationId: row.integration_id,
+      sourceLinks: row.source_links.map((link) => ({
+        id: link.id,
+        userId: link.user_id,
+        sourceBucketId: link.source_bucket_id,
+        mirrorBucketId: link.mirror_bucket_id,
+        priority: link.priority,
+        template: link.template ?? undefined,
+        defaultTags: link.default_tags ?? undefined,
+      })),
     }))
   }
 
