@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
 export const userSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   name: z.string(),
-  locale: z.string().optional(),
+  locale: z.string(),
 })
 
 export type User = z.infer<typeof userSchema>

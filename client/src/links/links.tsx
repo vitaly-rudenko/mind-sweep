@@ -2,20 +2,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ArrowRight } from 'lucide-react'
 import type { FC } from 'react'
 import { BucketCombobox } from './bucket-combobox'
-import { useRequiredAuth } from '@/auth/hooks'
 
 export const Links: FC = () => {
-  const {currentUser} = useRequiredAuth()
-
   return <div className='flex flex-col gap-2'>
     <div>Links</div>
-    <div>{JSON.stringify(currentUser, null, 2)}</div>
     <div className='flex flex-col gap-2'>
       <Link />
       <Link />
       <Link />
       <Link />
-    d</div>
+    </div>
   </div>
 }
 
