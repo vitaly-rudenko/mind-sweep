@@ -1,10 +1,10 @@
 import { Button } from '@/components/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter, CardContent } from '@/components/card'
-import { useEffect, useState, type FC } from 'react'
+import { useCallback, useEffect, useState, type FC } from 'react'
 import { BucketEditor } from './bucket-editor'
-import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation } from './api'
+import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation, useSyncLinkMutation } from './api'
 import type { Bucket, Bucket as BucketComponent, Link } from '@/types'
-import { createToast } from '@/utils/toast'
+import { createToast, dismissToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
@@ -15,6 +15,8 @@ import { bucketTypeName } from './bucket-type-name'
 export const Buckets: FC = () => {
   const { data, refetch } = useBucketsQuery()
 
+  const syncLinkMutation = useSyncLinkMutation()
+
   const [deleteId, setDeleteId] = useState<number>()
   const deleteMutation = useDeleteBucketMutation()
 
@@ -23,6 +25,22 @@ export const Buckets: FC = () => {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [selectedBucket, setSelectedBucket] = useState<Bucket>()
+
+  const handleSyncLink = useCallback(async (link: Link) => {
+    const toastId = createToast('Initiating sync...', { type: 'loading' })
+
+    try {
+      await syncLinkMutation.mutateAsync(link.id)
+      createToast('Sync has been initiated', {
+        description: 'It might take a few minutes to complete.',
+        type: 'success',
+        toastId,
+      })
+    } catch (err) {
+      console.error(err)
+      dismissToast(toastId)
+    }
+  }, [syncLinkMutation]);
 
   useEffect(() => {
     if (!editorOpen) {
@@ -86,6 +104,7 @@ export const Buckets: FC = () => {
             bucket={bucket}
             onLink={() => setSelectedBucket(bucket)}
             onDelete={() => setDeleteId(bucket.id)}
+            onSyncLink={handleSyncLink}
             onDeleteLink={(link) => setDeleteLinkId(link.id)}
           />
         ))}
@@ -99,12 +118,13 @@ const BucketComponent: FC<{
   bucket: Bucket
   onLink: () => void
   onDelete: () => void
+  onSyncLink: (link: Link) => void
   onDeleteLink: (link: Link) => void
-}> = ({ buckets, bucket, onLink, onDelete, onDeleteLink }) => {
+}> = ({ buckets, bucket, onLink, onDelete, onDeleteLink, onSyncLink }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <div className='flex flex-col gap-0'>
-    <Card className='overflow-hidden rounded-br-none'>
+    <Card className={cn('overflow-hidden', bucket.sourceLinks.length > 0 && 'rounded-br-none')}>
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
           <div className='truncate'>{bucket.name}</div>
@@ -120,7 +140,7 @@ const BucketComponent: FC<{
     </Card>
     <div className='flex flex-col gap-0'>
       {bucket.sourceLinks.map((link, i, arr) => (
-        <LinkComponent key={link.id} buckets={buckets} link={link} first={i === 0} last={i === arr.length - 1} onDelete={() => onDeleteLink(link)} />
+        <LinkComponent key={link.id} buckets={buckets} link={link} first={i === 0} last={i === arr.length - 1} onDelete={() => onDeleteLink(link)} onSync={() => onSyncLink(link)} />
       ))}
       <div className='flex items-center gap-2 pt-2 pl-2'>
         <CornerDownRight className='inline size-6 shrink-0 text-primary' />
@@ -137,8 +157,9 @@ const LinkComponent: FC<{
   link: Link
   first: boolean
   last: boolean
+  onSync: () => void
   onDelete: () => void
-}> = ({ buckets, link, first, last, onDelete }) => {
+}> = ({ buckets, link, first, last, onSync, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
@@ -167,6 +188,7 @@ const LinkComponent: FC<{
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
         <Separator />
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
+          <Button onClick={onSync} variant='link' className='grow basis-1'>Sync</Button>
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>
       </div>

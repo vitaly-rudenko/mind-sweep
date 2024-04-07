@@ -1,61 +1,56 @@
-export type IntegrationType = 'telegram' | 'notion'
-
-export type IntegrationMetadata = {
-  telegram: {
+export type Integration = {
+  id: number
+  name: string
+  userId: number
+  queryId: string
+} & ({
+  integrationType: 'telegram'
+  metadata: {
     userId: number
   }
-  notion: {
+} | {
+  integrationType: 'notion'
+  metadata: {
     userId: string
     integrationSecret: string
   }
-}
+})
 
-export type Integration<T extends IntegrationType | unknown = unknown> = {
+export type IntegrationType = Integration['integrationType']
+
+export type Bucket = {
   id: number
   name: string
   userId: number
   queryId: string
-  integrationType: T
-  metadata: T extends IntegrationType ? IntegrationMetadata[T] : unknown
-}
-
-export type BucketType = 'telegram_chat' | 'notion_database'
-
-type BucketMetadata = {
-  telegram_chat: {
+  integrationId: number
+} & ({
+  bucketType: 'telegram_chat'
+  metadata: {
     chatId: number
   }
-  notion_database: {
+} | {
+  bucketType: 'notion_database'
+  metadata: {
     databaseId: string
   }
-}
+})
 
-export type Bucket<T extends BucketType | unknown = unknown> = {
+export type BucketType = Bucket['bucketType']
+
+export type LoginMethod = {
   id: number
-  name: string
   userId: number
+  name: string
   queryId: string
-  bucketType: T
-  metadata: T extends BucketType ? BucketMetadata[T] : unknown
-  integrationId: number
-}
-
-export type LoginMethodType = 'telegram'
-
-export type LoginMethodMetadata = {
-  telegram: {
+} & ({
+  loginMethodType: 'telegram'
+  metadata: {
     userId: number
   }
-}
+})
 
-export type LoginMethod<T extends LoginMethodType | unknown = unknown> = {
-  id: number
-  userId: number
-  name: string
-  queryId: string
-  loginMethodType: T
-  metadata: T extends LoginMethodType ? LoginMethodMetadata[T] : unknown
-}
+export type LoginMethodType = LoginMethod['loginMethodType']
 
 export type Link = {
   id: number
@@ -65,4 +60,8 @@ export type Link = {
   priority: number
   template?: string
   defaultTags?: string[]
+}
+
+export type BucketWithSourceLinks = Bucket & {
+  sourceLinks: Link[]
 }

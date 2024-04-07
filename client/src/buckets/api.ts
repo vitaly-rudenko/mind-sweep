@@ -99,3 +99,16 @@ export const useDeleteLinkMutation = () => {
   })
 }
 
+
+export const useSyncLinkMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await callApi(`/links/${id}/sync`, {
+        method: 'POST',
+        headers: authorizationHeaders(authToken),
+      })
+    }
+  })
+}

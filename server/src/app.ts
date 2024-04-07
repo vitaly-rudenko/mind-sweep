@@ -20,8 +20,10 @@ import { withUserId } from './users/telegram.js'
 import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
-import type { Integration } from './types.js'
 import { Client } from '@notionhq/client'
+import { message } from 'telegraf/filters'
+import type { Message } from 'telegraf/types'
+import { match } from './match.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -136,11 +138,102 @@ async function start() {
 
     context.state.user = await storage.getUserByLoginMethod('telegram', String(context.from.id))
     if (!context.state.user) {
-      await context.reply('We don\'t know you yet 👀. Please use /start command to get started.')
+      if (context.chat?.type === 'private') {
+        await context.reply('We don\'t know you yet 👀. Please use /start command to get started.')
+      }
       return
     }
 
     return next()
+  })
+
+  const TAGGED_MESSAGE_TEXT_REGEX = /^(?<content>.+?)(?:\n\n(?<tags>(?:#\w+\s*)+))?$/s
+
+  function parseTelegramMessage(message: Pick<Message.TextMessage, 'text' | 'entities'>): { content: string; tags: string[] } {
+    const match = message.text.match(TAGGED_MESSAGE_TEXT_REGEX)
+
+    return {
+      content: match?.groups?.content ?? '',
+      tags: extractTagsFromMessage(message),
+    }
+  }
+
+  function extractTagsFromMessage(message: Pick<Message.TextMessage, 'text' | 'entities'>): string[] {
+    return [...new Set(
+      (message.entities ?? [])
+      .filter(entity => entity.type === 'hashtag')
+      .map(entity => message.text.slice(entity.offset + 1, entity.offset + entity.length))
+      .map(tag => tag.replaceAll('_', ' '))
+    )]
+  }
+
+  function createVendorEntityHash(input: string) {
+    return crypto.createHash('md5').update(input).digest('hex')
+  }
+
+  bot.on(message('text'), async (context) => {
+    const { content, tags } = parseTelegramMessage(context.message)
+
+    const links = await storage.queryLinksByMirrorBucket(context.state.user.id, 'telegram_chat', String(context.chat.id))
+
+    for (const link of links) {
+      if (link.template && match(content, link.template) === undefined) continue
+
+      const sourceBucket = await storage.getBucketById(context.state.user.id, link.sourceBucketId)
+      if (!sourceBucket) continue
+      const integration = await storage.getIntegrationById(context.state.user.id, sourceBucket.integrationId)
+      if (!integration) continue
+
+      if (integration.integrationType === 'notion' && sourceBucket.bucketType === 'notion_database') {
+        const notion = new Client({ auth: integration.metadata.integrationSecret });
+        const notionDatabase = await notion.databases.retrieve({ database_id: sourceBucket.metadata.databaseId });
+
+        const vendorEntityId = `${context.message.chat.id}_${context.message.message_id}`
+        const vendorEntityHash = createVendorEntityHash(context.message.text)
+        const vendorEntityMetadata = {
+          chatId: context.message.chat.id,
+          messageId: context.message.message_id,
+        }
+
+        await notion.pages.create({
+          parent: { database_id: notionDatabase.id },
+          properties: {
+            'Name': {
+              type: 'title',
+              title: [
+                {
+                  type: 'text',
+                  text: {
+                    content: content,
+                  },
+                },
+              ],
+            },
+            'Tags': {
+              type: 'multi_select',
+              multi_select: [...tags, ...link.defaultTags ?? []].map((tag) => ({ name: tag })),
+            },
+            'Status': {
+              type: 'select',
+              select: {
+                name: 'Not started'
+              },
+            },
+            'entity:telegram_message': {
+              type: 'rich_text',
+              rich_text: [
+                {
+                  type: 'text',
+                  text: {
+                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
+                  },
+                },
+              ],
+            }
+          },
+        })
+      }
+    }
   })
 
   bot.command('app', async (context) => {
@@ -333,7 +426,7 @@ async function start() {
     const input = createBucketSchema.parse(req.body)
 
     if (input.bucketType === 'notion_database') {
-      const integration = await storage.getIntegrationById<'notion'>(req.user.id, input.integrationId)
+      const integration = await storage.getIntegrationById(req.user.id, input.integrationId)
       if (integration?.integrationType !== 'notion') {
         throw new ApiError({
           code: 'INVALID_INTEGRATION',
@@ -427,6 +520,77 @@ async function start() {
   router.delete('/links/:id', async (req, res) => {
     await storage.deleteLinkById(req.user.id, Number(req.params.id))
     res.sendStatus(204)
+  })
+
+  const SERIALIZED_VENDOR_ENTITY_REGEX = /^(.+?):(\{.+\}):(.+)$/
+
+  router.post('/links/:id/sync', async (req, res) => {
+    const link = await storage.getLinkById(req.user.id, Number(req.params.id))
+    if (!link) throw new NotFoundError()
+
+    const mirrorBucket = await storage.getBucketById(req.user.id, link.mirrorBucketId)
+    const sourceBucket = await storage.getBucketById(req.user.id, link.sourceBucketId)
+    if (!mirrorBucket || !sourceBucket) throw new NotFoundError()
+
+    if (sourceBucket.bucketType !== 'notion_database' || mirrorBucket.bucketType !== 'telegram_chat') {
+      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
+    }
+
+    const mirrorIntegration = await storage.getIntegrationById(req.user.id, mirrorBucket.integrationId)
+    const sourceIntegration = await storage.getIntegrationById(req.user.id, sourceBucket.integrationId)
+    if (!mirrorIntegration || !sourceIntegration) throw new NotFoundError()
+
+    if (sourceIntegration.integrationType !== 'notion' || mirrorIntegration.integrationType !== 'telegram') {
+      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
+    }
+
+    const notion = new Client({ auth: sourceIntegration.metadata.integrationSecret });
+    const pages = await notion.databases.query({
+      database_id: sourceBucket.metadata.databaseId,
+    });
+
+    for (const page of pages.results) {
+      if (page.object !== 'page' || !('properties' in page)) continue
+
+      const nameProperty = page.properties['Name']
+      if (!nameProperty || nameProperty.type !== 'title') continue
+
+      const content = nameProperty.title[0].plain_text
+      if (link.template && match(content, link.template) === undefined) continue
+
+      const telegramMessageProperty = page.properties['entity:telegram_message']
+      if (!telegramMessageProperty || telegramMessageProperty.type !== 'rich_text') continue
+
+      if (!telegramMessageProperty?.rich_text?.[0]?.plain_text) {
+        const message = await bot.telegram.sendMessage(mirrorBucket.metadata.chatId, content)
+
+        const vendorEntityId = `${message.chat.id}_${message.message_id}`
+        const vendorEntityHash = createVendorEntityHash(message.text)
+        const vendorEntityMetadata = {
+          chatId: message.chat.id,
+          messageId: message.message_id,
+        }
+
+        await notion.pages.update({
+          page_id: page.id,
+          properties: {
+            'entity:telegram_message': {
+              type: 'rich_text',
+              rich_text: [
+                {
+                  type: 'text',
+                  text: {
+                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
+                  },
+                },
+              ],
+            }
+          },
+        })
+      }
+    }
+
+    res.sendStatus(200)
   })
 
   app.use(router)
