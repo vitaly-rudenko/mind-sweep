@@ -20,6 +20,7 @@ import { createToast, dismissToast } from '@/utils/toast'
 import { useCreateIntegrationMutation } from './api'
 import { ApiError } from '@/utils/api'
 import { useWebApp } from '@/web-app/hooks'
+import { integrationTypeName } from './integration-type-name'
 
 const formSchema = z.discriminatedUnion('integrationType', [
   z.object({
@@ -47,11 +48,6 @@ const defaultValues: FormState = {
     integrationSecret: '',
   },
 }
-
-const integrationTypeNameMap = {
-  notion: 'Notion',
-  telegram: 'Telegram',
-} satisfies Record<FormState['integrationType'], string>
 
 export const IntegrationEditor: FC<{
   open: boolean
@@ -156,7 +152,7 @@ export const IntegrationEditor: FC<{
                 )}
               </div>
               <DrawerFooter>
-                <Button type='submit' disabled={selectOpenDebounced}>Add {integrationTypeNameMap[$integrationType]} Integration</Button>
+                <Button type='submit' disabled={selectOpenDebounced}>Add {integrationTypeName($integrationType)} Integration</Button>
                 <DrawerClose asChild>
                   <Button variant='outline' disabled={selectOpenDebounced}>Cancel</Button>
                 </DrawerClose>

@@ -64,14 +64,16 @@ function RootComponent() {
       <ThemeProvider>
         <WebAppProvider>
           <AuthProvider>
-            <div className={cn(
-              'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[34rem]',
-              focusedOnInput && 'pb-[50vh]',
-            )}>
-              <Navigation />
-              <Outlet />
-              <Toaster />
-              <CopyAuthLinkButton />
+            <div className='flex justify-center'>
+              <div className={cn(
+                'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[48rem]',
+                focusedOnInput && 'pb-[50vh]',
+              )}>
+                <Navigation />
+                <Outlet />
+                <Toaster />
+                <CopyAuthLinkButton />
+              </div>
             </div>
           </AuthProvider>
         </WebAppProvider>

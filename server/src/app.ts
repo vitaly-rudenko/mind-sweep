@@ -425,7 +425,7 @@ async function start() {
   })
 
   router.delete('/links/:id', async (req, res) => {
-    await storage.deleteBucketById(req.user.id, Number(req.params.id))
+    await storage.deleteLinkById(req.user.id, Number(req.params.id))
     res.sendStatus(204)
   })
 

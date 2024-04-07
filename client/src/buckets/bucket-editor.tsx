@@ -18,7 +18,8 @@ import { ApiError } from '@/utils/api'
 import { useWebApp } from '@/web-app/hooks'
 import { useIntegrationsQuery } from '@/integrations/api'
 import { IntegrationCombobox } from '@/integrations/integration-combobox'
-import type { Integration, IntegrationType } from '@/types'
+import type { BucketType, Integration, IntegrationType } from '@/types'
+import { bucketTypeName } from './bucket-type-name'
 
 type FormState = {
   integration: Integration | ''
@@ -38,11 +39,6 @@ const defaultValues: FormState = {
   },
 }
 
-const bucketTypeNameMap = {
-  notion: 'Notion database',
-  telegram: 'Telegram chat',
-} satisfies Record<IntegrationType, string>
-
 export const BucketEditor: FC<{
   open: boolean
   onClose: () => void
@@ -55,8 +51,10 @@ export const BucketEditor: FC<{
   const form = useForm<FormState>({ defaultValues })
   const [$integration] = form.watch(['integration'])
 
+  const bucketType: BucketType | undefined = $integration === '' ? undefined : $integration.integrationType === 'notion' ? 'notion_database' : 'telegram_chat'
+
   const onSubmit = useCallback(async (formState: FormState) => {
-    if (!formState.integration) return
+    if (!formState.integration || !bucketType) return
 
     const toastId = createToast('Adding Bucket...', { type: 'loading' })
 
@@ -65,7 +63,7 @@ export const BucketEditor: FC<{
         await createMutation.mutateAsync({
           integrationId: formState.integration.id,
           name: formState.name,
-          bucketType: 'notion_database',
+          bucketType,
           metadata: {
             databaseId: formState.metadata.databaseId,
           }
@@ -74,7 +72,7 @@ export const BucketEditor: FC<{
         await createMutation.mutateAsync({
           integrationId: formState.integration.id,
           name: formState.name,
-          bucketType: 'telegram_chat',
+          bucketType,
           metadata: {
             initData: webApp?.initData,
           }
@@ -95,7 +93,7 @@ export const BucketEditor: FC<{
       console.error(error)
       dismissToast(toastId)
     }
-  }, [createMutation, onClose, webApp?.initData])
+  }, [bucketType, createMutation, onClose, webApp?.initData])
 
   useEffect(() => {
     if (open) {
@@ -165,7 +163,7 @@ export const BucketEditor: FC<{
               </div>
               <DrawerFooter>
                 <Button type='submit'>
-                  {$integration ? `Add ${bucketTypeNameMap[$integration.integrationType]} Bucket` : 'Add Bucket'}
+                  {bucketType ? `Add ${bucketTypeName(bucketType)} Bucket` : 'Add Bucket'}
                 </Button>
                 <DrawerClose asChild>
                   <Button variant='outline'>Cancel</Button>

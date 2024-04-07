@@ -85,3 +85,17 @@ export const useCreateLinkMutation = () => {
     }
   })
 }
+
+export const useDeleteLinkMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await callApi(`/links/${id}`, {
+        method: 'DELETE',
+        headers: authorizationHeaders(authToken),
+      })
+    }
+  })
+}
+

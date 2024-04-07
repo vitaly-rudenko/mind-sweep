@@ -79,7 +79,7 @@ export const BucketCombobox: FC<{
 const BucketComponent: FC<{ bucket: Bucket }> = ({ bucket }) => {
   return <div className='flex flex-col items-start'>
     <div>{bucket.name}</div>
-    <div className='text-xs text-primary/50'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</div>
+    <div className='text-xs text-primary'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</div>
   </div>
 }
 

@@ -8,6 +8,7 @@ import { createToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
+import { integrationTypeName } from './integration-type-name'
 
 export const Integrations: FC = () => {
   const { data, refetch } = useIntegrationsQuery()
@@ -63,19 +64,16 @@ const Integration: FC<{
 }> = ({ integration, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
-  return <Card className={cn(
-    'overflow-hidden transition-shadow hover:shadow-lg',
-    expanded ? 'shadow-lg' : 'shadow-md',
-  )}>
+  return <Card className='overflow-hidden'>
     <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
-      <CardTitle className='flex items-baseline gap-2'>
-        <div>{integration.name}</div>
-        <CardDescription>{integration.integrationType === 'telegram' ? 'Telegram' : 'Notion'}</CardDescription>
+      <CardTitle className='flex justify-between items-baseline gap-2'>
+        <div className='truncate'>{integration.name}</div>
+        <CardDescription className='text-primary whitespace-nowrap'>{integrationTypeName(integration.integrationType)}</CardDescription>
       </CardTitle>
     </CardHeader>
     <div className={cn('transition-[height]', expanded ? 'h-10' : 'h-0')}>
       <Separator />
-      <CardFooter className='flex flex-row items-stretch p-0 h-full'>
+      <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
         <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
       </CardFooter>
     </div>

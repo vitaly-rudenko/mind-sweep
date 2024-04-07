@@ -50,7 +50,7 @@ export const Notes: FC = () => {
 const Bucket: FC<{ children: ReactNode; title: string }> = ({ children, title }) => {
   const [visible, setVisible] = useState(true)
 
-  return <Card className='transition-shadow hover:shadow-lg'>
+  return <Card>
     <CardHeader>
       <CardTitle className='cursor-pointer transition-colors hover:text-primary/70' onClick={() => setVisible(!visible)}>
         {title}

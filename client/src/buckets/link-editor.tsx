@@ -18,6 +18,7 @@ import type { Bucket } from '@/types'
 import { BucketCombobox } from './bucket-combobox'
 import { ArrowDown } from 'lucide-react'
 import { Input } from '@/components/input'
+import { bucketTypeName } from './bucket-type-name'
 
 type FormState = {
   sourceBucket: Bucket | ''
@@ -168,7 +169,9 @@ export const LinkEditor: FC<{
 
               <DrawerFooter>
                 <Button type='submit'>
-                  {$sourceBucket && $mirrorBucket ? `Link ${$sourceBucket.name} to ${$mirrorBucket.name}` : 'Link Buckets'}
+                  <div className='truncate'>
+                    {$mirrorBucket && $sourceBucket ? `Link ${bucketTypeName($mirrorBucket.bucketType)} to ${bucketTypeName($sourceBucket.bucketType)}` : 'Link Buckets'}
+                  </div>
                 </Button>
                 <DrawerClose asChild>
                   <Button variant='outline'>Cancel</Button>

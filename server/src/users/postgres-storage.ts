@@ -242,4 +242,8 @@ export class PostgresStorage {
   async deleteBucketById(userId: number, bucketId: number): Promise<void> {
     await this.client.query('DELETE FROM buckets WHERE user_id = $1 AND id = $2;', [userId, bucketId])
   }
+
+  async deleteLinkById(userId: number, linkId: number): Promise<void> {
+    await this.client.query('DELETE FROM links WHERE user_id = $1 AND id = $2;', [userId, linkId])
+  }
 }

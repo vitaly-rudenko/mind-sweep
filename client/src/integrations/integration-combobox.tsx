@@ -78,7 +78,7 @@ export const IntegrationCombobox: FC<{
 const IntegrationComponent: FC<{ integration: Integration }> = ({ integration }) => {
   return <div className='flex flex-col items-start'>
     <div>{integration.name}</div>
-    <div className='text-xs text-primary/50'>{integration.integrationType === 'telegram' ? 'Telegram' : 'Notion'}</div>
+    <div className='text-xs text-primary'>{integration.integrationType === 'telegram' ? 'Telegram' : 'Notion'}</div>
   </div>
 }
 
