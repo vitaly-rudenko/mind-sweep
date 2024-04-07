@@ -1,5 +1,5 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../types.js'
+import type { Bucket, BucketType, BucketWithSourceLinks, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
 import { AlreadyExistsError, ApiError } from '../common/errors.js'
 
@@ -9,33 +9,33 @@ type UserRow = {
   locale: string
 }
 
-type IntegrationRow<T extends IntegrationType | unknown = unknown> = {
+type IntegrationRow = {
   id: number
   name: string
   user_id: number
   query_id: string
-  integration_type: T
-  metadata: Integration<T>['metadata']
+  integration_type: string
+  metadata: unknown
 }
 
-type BucketRow<T extends BucketType | unknown = unknown> = {
+type BucketRow = {
   id: number
   name: string
   user_id: number
   query_id: string
-  bucket_type: T
-  metadata: Bucket<T>['metadata']
+  bucket_type: string
+  metadata: unknown
   integration_id: number
   source_links: LinkRow[]
 }
 
-type LoginMethodRow<T extends LoginMethodType | unknown = unknown> = {
+type LoginMethodRow = {
   id: number
   user_id: number
   name: string
   query_id: string
-  login_method_type: T
-  metadata: LoginMethod<T>['metadata']
+  login_method_type: string
+  metadata: unknown
 }
 
 type LinkRow = {
@@ -73,11 +73,11 @@ export class PostgresStorage {
     }
   }
 
-  async createUserWithIntegration<I extends IntegrationType, B extends BucketType>(
+  async createUserWithIntegration(
     user: Omit<User, 'id'>,
-    loginMethod: Omit<LoginMethod<LoginMethodType>, 'id' | 'userId'>,
-    integration: Omit<Integration<I>, 'id' | 'userId' | 'isLoginMethod'>,
-    bucket: Omit<Bucket<B>, 'id' | 'userId' | 'integrationId'>
+    loginMethod: Omit<LoginMethod, 'id' | 'userId'>,
+    integration: Omit<Integration, 'id' | 'userId' | 'isLoginMethod'>,
+    bucket: Omit<Bucket, 'id' | 'userId' | 'integrationId'>
   ): Promise<{ user: User }> {
     try {
       await this.client.query('BEGIN;')
@@ -99,7 +99,7 @@ export class PostgresStorage {
         RETURNING id;
       `, [userId, integration.name, integration.queryId, integration.integrationType, integration.metadata])
 
-      await this.client.query<BucketRow<BucketType>>(`
+      await this.client.query<BucketRow>(`
         INSERT INTO buckets (integration_id, user_id, name, query_id, bucket_type, metadata)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id;
@@ -135,15 +135,15 @@ export class PostgresStorage {
     } : undefined
   }
 
-  async createIntegration<I extends IntegrationType>(integration: Omit<Integration<I>, 'id'>): Promise<Integration<I>> {
+  async createIntegration(integration: Omit<Integration, 'id'>): Promise<Integration> {
     try {
-      const { rows: [{ id }] } = await this.client.query<IntegrationRow<I>>(`
+      const { rows: [{ id }] } = await this.client.query<IntegrationRow>(`
         INSERT INTO integrations (user_id, name, query_id, integration_type, metadata)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id;
       `, [integration.userId, integration.name, integration.queryId, integration.integrationType, integration.metadata])
 
-      return { id, ...integration }
+      return { id, ...integration } as Integration
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
         throw new AlreadyExistsError('Integration already exists')
@@ -153,8 +153,8 @@ export class PostgresStorage {
     }
   }
 
-  async getIntegrationsByUserId<I extends IntegrationType>(userId: number): Promise<Integration<I>[]> {
-    const { rows } = await this.client.query<IntegrationRow<I>>(`
+  async getIntegrationsByUserId(userId: number): Promise<Integration[]> {
+    const { rows } = await this.client.query<IntegrationRow>(`
       SELECT id, user_id, name, query_id, integration_type, metadata
       FROM integrations
       WHERE user_id = $1;
@@ -167,11 +167,11 @@ export class PostgresStorage {
       queryId: row.query_id,
       integrationType: row.integration_type,
       metadata: row.metadata,
-    }))
+    }) as Integration)
   }
 
-  async getIntegrationById<I extends IntegrationType>(userId: number, integrationId: number): Promise<Integration<I> | undefined> {
-    const { rows } = await this.client.query<IntegrationRow<I>>(`
+  async getIntegrationById(userId: number, integrationId: number): Promise<Integration | undefined> {
+    const { rows } = await this.client.query<IntegrationRow>(`
       SELECT id, user_id, name, query_id, integration_type, metadata
       FROM integrations
       WHERE user_id = $1 AND id = $2;
@@ -184,22 +184,22 @@ export class PostgresStorage {
       queryId: rows[0].query_id,
       integrationType: rows[0].integration_type,
       metadata: rows[0].metadata,
-    } : undefined
+    } as Integration : undefined
   }
 
   async deleteIntegrationById(userId: number, integrationId: number): Promise<void> {
     await this.client.query('DELETE FROM integrations WHERE user_id = $1 AND id = $2;', [userId, integrationId])
   }
 
-  async createBucket<I extends BucketType>(bucket: Omit<Bucket<I>, 'id'>): Promise<Bucket<I>> {
+  async createBucket(bucket: Omit<Bucket, 'id'>): Promise<Bucket> {
     try {
-      const { rows: [{ id }] } = await this.client.query<BucketRow<I>>(`
+      const { rows: [{ id }] } = await this.client.query<BucketRow>(`
         INSERT INTO buckets (user_id, name, query_id, bucket_type, metadata, integration_id)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id;
       `, [bucket.userId, bucket.name, bucket.queryId, bucket.bucketType, bucket.metadata, bucket.integrationId])
 
-      return { id, ...bucket }
+      return { id, ...bucket } as Bucket
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
         throw new AlreadyExistsError('Bucket already exists')
@@ -209,8 +209,8 @@ export class PostgresStorage {
     }
   }
 
-  async getBucketsByUserId<I extends BucketType>(userId: number): Promise<(Bucket<I> & { sourceLinks: Link[] })[]> {
-    const { rows } = await this.client.query<BucketRow<I>>(`
+  async getBucketsByUserId(userId: number): Promise<BucketWithSourceLinks[]> {
+    const { rows } = await this.client.query<BucketRow>(`
       SELECT b.id, b.user_id, b.name, b.query_id, b.bucket_type, b.metadata, b.integration_id
         , COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
       FROM buckets b
@@ -219,24 +219,7 @@ export class PostgresStorage {
       GROUP BY b.id;
     `, [userId])
 
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      userId: row.user_id,
-      queryId: row.query_id,
-      bucketType: row.bucket_type,
-      metadata: row.metadata,
-      integrationId: row.integration_id,
-      sourceLinks: row.source_links.map((link) => ({
-        id: link.id,
-        userId: link.user_id,
-        sourceBucketId: link.source_bucket_id,
-        mirrorBucketId: link.mirror_bucket_id,
-        priority: link.priority,
-        template: link.template ?? undefined,
-        defaultTags: link.default_tags ?? undefined,
-      })),
-    }))
+    return rows.map(row => this.deserializeBucketWithSourceLinks(row))
   }
 
   async deleteBucketById(userId: number, bucketId: number): Promise<void> {
@@ -245,5 +228,75 @@ export class PostgresStorage {
 
   async deleteLinkById(userId: number, linkId: number): Promise<void> {
     await this.client.query('DELETE FROM links WHERE user_id = $1 AND id = $2;', [userId, linkId])
+  }
+
+  async queryLinksByMirrorBucket(
+    userId: number,
+    mirrorBucketType: BucketType,
+    mirrorBucketQueryId: string,
+  ): Promise<Link[]> {
+    const { rows } = await this.client.query<LinkRow>(`
+      SELECT l.*
+      FROM links l
+      WHERE user_id = $1
+        AND mirror_bucket_id = (
+          SELECT id
+          FROM buckets
+          WHERE user_id = $1 AND bucket_type = $2 AND query_id = $3
+        );
+    `, [userId, mirrorBucketType, mirrorBucketQueryId])
+
+    return rows.map(row => this.deserializeLink(row))
+  }
+
+  async getBucketById(userId: number, bucketId: number): Promise<Bucket | undefined> {
+    const { rows } = await this.client.query<BucketRow>(`
+      SELECT b.*
+      FROM buckets b
+      WHERE b.user_id = $1 AND b.id = $2;
+    `, [userId, bucketId])
+
+    return rows[0] ? this.deserializeBucket(rows[0]) : undefined
+  }
+
+  async getLinkById(userId: number, linkId: number): Promise<Link | undefined> {
+    const { rows } = await this.client.query<LinkRow>(`
+      SELECT l.*
+      FROM links l
+      WHERE l.user_id = $1 AND l.id = $2;
+    `, [userId, linkId])
+
+    return rows[0] ? this.deserializeLink(rows[0]) : undefined
+  }
+
+  deserializeBucket(row: BucketRow) {
+    return {
+      id: row.id,
+      name: row.name,
+      userId: row.user_id,
+      queryId: row.query_id,
+      bucketType: row.bucket_type,
+      metadata: row.metadata,
+      integrationId: row.integration_id,
+    } as Bucket
+  }
+
+  deserializeBucketWithSourceLinks(row: BucketRow) {
+    return {
+      ...this.deserializeBucket(row),
+      sourceLinks: row.source_links.map(row => this.deserializeLink(row)),
+    } as BucketWithSourceLinks
+  }
+
+  deserializeLink(row: LinkRow): Link {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      sourceBucketId: row.source_bucket_id,
+      mirrorBucketId: row.mirror_bucket_id,
+      priority: row.priority,
+      template: row.template ?? undefined,
+      defaultTags: row.default_tags ?? undefined,
+    }
   }
 }
