@@ -1,9 +1,9 @@
 import { Navigate, createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
-  component: IndexComponent,
+  component: Component,
 })
 
-function IndexComponent() {
-  return <Navigate to='/notes' />
+function Component() {
+  return <Navigate to='/buckets' />
 }

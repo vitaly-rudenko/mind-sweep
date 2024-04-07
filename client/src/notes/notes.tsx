@@ -1,5 +1,4 @@
-import { Button } from '@/components/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/card'
 import { Separator } from '@/components/separator'
 import { cn } from '@/utils/cn'
 import { useState, type FC, type ReactNode } from 'react'
@@ -51,7 +50,7 @@ export const Notes: FC = () => {
 const Bucket: FC<{ children: ReactNode; title: string }> = ({ children, title }) => {
   const [visible, setVisible] = useState(true)
 
-  return <Card className='transition-shadow hover:shadow-lg'>
+  return <Card>
     <CardHeader>
       <CardTitle className='cursor-pointer transition-colors hover:text-primary/70' onClick={() => setVisible(!visible)}>
         {title}

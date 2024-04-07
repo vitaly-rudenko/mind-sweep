@@ -2,14 +2,18 @@ import { Link, Outlet, createRootRoute } from '@tanstack/react-router'
 import { Toaster } from '@/components/sonner'
 import { ThemeProvider } from '@/theme/context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { type FC } from 'react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/button'
+import { WebAppProvider } from '@/web-app/context'
+import { AuthProvider } from '@/auth/context'
+import { useAuth } from '@/auth/hooks'
+import { Navigation } from '@/navigation/navigation'
 
 export const Route = createRootRoute({
   validateSearch: (search: Record<string, unknown>) => {
     return {
-      code: typeof search.code === 'string' ? search.code : undefined,
+      authToken: typeof search.auth_token === 'string' ? search.auth_token : undefined,
     }
   },
   component: RootComponent,
@@ -28,44 +32,35 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const queryClient = new QueryClient()
-  const [focusedOnInput, setFocusedOnInput] = useState(false)
-
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-
-    const focusInListener = (event: FocusEvent) => {
-      if (event.target instanceof HTMLInputElement) {
-        clearTimeout(timeoutId)
-        setFocusedOnInput(true)
-      }
-    }
-
-    const focusOutListener = () => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => setFocusedOnInput(false), 50)
-    }
-
-    window.document.addEventListener('focusin', focusInListener)
-    window.document.addEventListener('focusout', focusOutListener)
-
-    return () => {
-      clearTimeout(timeoutId)
-      window.document.removeEventListener('focusin', focusInListener)
-      window.document.removeEventListener('focusout', focusOutListener)
-    }
-  }, [])
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <div className={cn(
-          'flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[34rem]',
-          focusedOnInput && 'pb-[50vh]',
-        )}>
-          <Outlet />
-          <Toaster />
-        </div>
+        <WebAppProvider>
+          <AuthProvider>
+            <div className='flex justify-center'>
+              <div className={cn('flex flex-col gap-1 px-3 pt-3 pb-6 select-none w-full min-w-[18rem] max-w-[48rem]')}>
+                <Navigation />
+                <Outlet />
+                <Toaster />
+                <CopyAuthLinkButton />
+              </div>
+            </div>
+          </AuthProvider>
+        </WebAppProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )
+}
+
+const CopyAuthLinkButton: FC = () => {
+  const auth = useAuth()
+  if (!auth.authToken) return null
+
+  const url = new URL(window.location.origin)
+  const searchParams = new URLSearchParams()
+  searchParams.set('auth_token', auth.authToken)
+  url.hash = `/?${searchParams.toString()}`
+
+  return <input className='text-xs text-background pt-2 outline-none bg-transparent' type='text' readOnly value={url.toString()} />
 }

@@ -2,9 +2,9 @@ import { Notes } from '@/notes/notes'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/notes/')({
-  component: ReceiptsComponent,
+  component: Component,
 })
 
-function ReceiptsComponent() {
+function Component() {
   return <Notes />
 }

@@ -38,7 +38,6 @@ const envSchema = z.object({
   PORT: numberSchema,
   LOG_LEVEL: logLevelSchema,
   USE_TEST_MODE: optionalBooleanSchema,
-  ENABLE_TEST_HTTPS: optionalBooleanSchema,
   REDIS_URL: urlSchema,
   DATABASE_URL: urlSchema,
   LOG_DATABASE_QUERIES: optionalBooleanSchema,
@@ -47,9 +46,7 @@ const envSchema = z.object({
   WEB_APP_URL: urlSchema,
   WEB_APP_NAME: stringSchema,
   CORS_ORIGIN: urlArraySchema,
-  NOTION_TEST_INTEGRATION_SECRET: stringSchema,
-  NOTION_TEST_DATABASE_ID: stringSchema,
-  TELEGRAM_TEST_CHAT_ID: numberSchema,
+  TOKEN_SECRET: stringSchema,
 })
 
 export const env = envSchema.parse(process.env)
