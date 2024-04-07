@@ -61,7 +61,7 @@ export const BucketCombobox: FC<{
                 >
                   <Check
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'mr-2 h-4 w-4 shrink-0',
                       selected?.id === item.id ? 'opacity-100' : 'opacity-0'
                     )}
                   />
@@ -77,8 +77,8 @@ export const BucketCombobox: FC<{
 }
 
 const BucketComponent: FC<{ bucket: Bucket }> = ({ bucket }) => {
-  return <div className='flex flex-col items-start'>
-    <div>{bucket.name}</div>
+  return <div className='flex flex-col items-start overflow-hidden'>
+    <div className='truncate'>{bucket.name}</div>
     <div className='text-xs text-primary'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</div>
   </div>
 }

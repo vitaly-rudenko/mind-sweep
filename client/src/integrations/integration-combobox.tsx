@@ -60,7 +60,7 @@ export const IntegrationCombobox: FC<{
                 >
                   <Check
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'shrink-0 mr-2 h-4 w-4',
                       selected?.id === item.id ? 'opacity-100' : 'opacity-0'
                     )}
                   />
@@ -76,8 +76,8 @@ export const IntegrationCombobox: FC<{
 }
 
 const IntegrationComponent: FC<{ integration: Integration }> = ({ integration }) => {
-  return <div className='flex flex-col items-start'>
-    <div>{integration.name}</div>
+  return <div className='flex flex-col items-start overflow-hidden'>
+    <div className='truncate'>{integration.name}</div>
     <div className='text-xs text-primary'>{integration.integrationType === 'telegram' ? 'Telegram' : 'Notion'}</div>
   </div>
 }

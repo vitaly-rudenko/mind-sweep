@@ -87,8 +87,8 @@ export const LinkEditor: FC<{
     if (open) {
       form.reset({
         ...defaultValues,
-        sourceBucket,
-        mirrorBucket,
+        sourceBucket: sourceBucket ?? '',
+        mirrorBucket: mirrorBucket ?? '',
       })
     }
   }, [form, open, mirrorBucket, sourceBucket])

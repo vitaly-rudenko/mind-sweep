@@ -8,8 +8,9 @@ import { createToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
-import { ArrowRight } from 'lucide-react'
+import { CornerDownRight } from 'lucide-react'
 import { LinkEditor } from './link-editor'
+import { bucketTypeName } from './bucket-type-name'
 
 export const Buckets: FC = () => {
   const { data, refetch } = useBucketsQuery()
@@ -107,7 +108,7 @@ const BucketComponent: FC<{
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
           <div className='truncate'>{bucket.name}</div>
-          <CardDescription className='whitespace-nowrap text-primary'>{bucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
+          <CardDescription className='whitespace-nowrap text-primary'>{bucketTypeName(bucket.bucketType)}</CardDescription>
         </CardTitle>
       </CardHeader>
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
@@ -121,8 +122,8 @@ const BucketComponent: FC<{
       {bucket.sourceLinks.map((link, i, arr) => (
         <LinkComponent key={link.id} buckets={buckets} link={link} first={i === 0} last={i === arr.length - 1} onDelete={() => onDeleteLink(link)} />
       ))}
-      <div className='flex items-center gap-2 pt-2'>
-        <ArrowRight className='inline size-6 shrink-0 text-primary' />
+      <div className='flex items-center gap-2 pt-2 pl-2'>
+        <CornerDownRight className='inline size-6 shrink-0 text-primary' />
         <Button variant='link' role='combobox' className='p-0 justify-between h-auto' onClick={onLink}>
           Link to...
         </Button>
@@ -143,8 +144,8 @@ const LinkComponent: FC<{
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
   if (!sourceBucket) return null
 
-  return <div className='flex flex-row items-center gap-2'>
-    <ArrowRight className='inline size-6 shrink-0 text-primary' />
+  return <div className='flex flex-row items-center gap-2 pl-2'>
+    <CornerDownRight className='inline size-6 shrink-0 text-primary' />
     <Card className={cn(
       'grow overflow-hidden rounded-none',
       !last && 'border-b-0',
@@ -154,7 +155,7 @@ const LinkComponent: FC<{
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
           <div className='truncate'>{sourceBucket.name}</div>
-          <CardDescription className='text-primary whitespace-nowrap'>{sourceBucket.bucketType === 'telegram_chat' ? 'Telegram chat' : 'Notion database'}</CardDescription>
+          <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
         </CardTitle>
       </CardHeader>
       {!!(link.template || link.defaultTags) && (
