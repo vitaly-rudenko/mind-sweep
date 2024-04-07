@@ -429,6 +429,11 @@ async function start() {
     res.sendStatus(204)
   })
 
+  router.post('/links/:id/sync', async (req, res) => {
+    // TODO:
+    res.sendStatus(200)
+  })
+
   app.use(router)
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
