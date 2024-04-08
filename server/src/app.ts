@@ -28,6 +28,7 @@ import { createLinksRouter } from './links/routes.js'
 import { createBucketsRouter } from './buckets/routes.js'
 import type { Note, Require, VendorEntity } from './types.js'
 import { NotionBucket } from './notion/notion-bucket.js'
+import { stripIndent } from 'common-tags'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -103,6 +104,17 @@ async function start() {
   const storage = new PostgresStorage(pgClient)
 
   registry.values({ storage })
+
+  bot.command('app', async (context) => {
+    await context.reply(generateWebAppUrl())
+  })
+
+  bot.command('debug', async (context) => {
+    await context.reply(stripIndent`
+      Chat ID: ${context.chat.id} (${context.chat.type})
+      User ID: ${context.from?.id ?? 'unknown'}
+    `)
+  })
 
   bot.command('start', async (context) => {
     const user = await storage.getUserByLoginMethod('telegram', String(context.from.id))
@@ -185,10 +197,6 @@ async function start() {
         })
       }
     }
-  })
-
-  bot.command('app', async (context) => {
-    await context.reply(generateWebAppUrl())
   })
 
   const app = express()

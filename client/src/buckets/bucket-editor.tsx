@@ -27,6 +27,7 @@ type FormState = {
   metadata: {
     databaseId: string
     initData: string
+    chatId: string
   }
 }
 
@@ -36,6 +37,7 @@ const defaultValues: FormState = {
   metadata: {
     databaseId: '',
     initData: '',
+    chatId: '',
   },
 }
 
@@ -75,6 +77,7 @@ export const BucketEditor: FC<{
           bucketType,
           metadata: {
             initData: webApp?.initData,
+            ...formState.metadata.chatId && { chatId: Number(formState.metadata.chatId) },
           }
         })
       } else {
@@ -156,6 +159,18 @@ export const BucketEditor: FC<{
 
                           form.setValue('metadata.databaseId', value)
                         }} />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {$integration !== '' && $integration.integrationType === 'telegram' && (
+                  <FormField
+                    control={form.control}
+                    name='metadata.chatId'
+                    render={({ field }) => (
+                      <FormItem>
+                        <Input {...field} placeholder='Chat ID (optional)' />
                       </FormItem>
                     )}
                   />

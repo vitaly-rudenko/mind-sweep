@@ -23,6 +23,7 @@ const createBucketSchema = z.discriminatedUnion('bucketType', [
     name: z.string().optional(),
     metadata: z.object({
       initData: z.string().min(1),
+      chatId: z.number().optional(),
     })
   })
 ]);
@@ -30,7 +31,7 @@ const createBucketSchema = z.discriminatedUnion('bucketType', [
 export function createBucketsRouter() {
   const router = Router()
 
-  const { storage, botInfo } = registry.export()
+  const { storage, botInfo, telegram } = registry.export()
 
   router.post('/buckets', async (req, res) => {
     const input = createBucketSchema.parse(req.body)
@@ -74,14 +75,31 @@ export function createBucketsRouter() {
         })
       }
 
+      const chatId = input.metadata.chatId ?? telegramUser.id
+      const chatMember = await telegram.getChatMember(chatId, telegramUser.id)
+      if (chatMember.status !== 'administrator' && chatMember.status !== 'creator')  {
+        throw new ApiError({
+          code: 'USER_IS_NOT_ADMIN',
+          status: 400,
+        })
+      }
+
+      const chat = input.metadata.chatId ? await telegram.getChat(chatId) : undefined
+      if (chat && chat.type === 'private') {
+        throw new ApiError({
+          code: 'PRIVATE_CHATS_ARE_NOT_SUPPORTED',
+          status: 400,
+        })
+      }
+
       await storage.createBucket({
         integrationId: input.integrationId,
         bucketType: 'telegram_chat',
-        name: input.name || formatTelegramUserName(botInfo),
+        name: input.name || (chat ? chat.title : formatTelegramUserName(botInfo)),
         userId: req.user.id,
-        queryId: String(telegramUser.id),
+        queryId: String(chatId),
         metadata: {
-          chatId: telegramUser.id,
+          chatId,
         }
       })
     } else {
