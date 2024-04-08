@@ -168,7 +168,7 @@ const LinkComponent: FC<{
   return <div className='flex flex-row items-center gap-2 pl-2'>
     <CornerDownRight className='inline size-6 shrink-0 text-primary' />
     <Card className={cn(
-      'grow overflow-hidden rounded-none',
+      'grow overflow-hidden bg-card/50 rounded-none',
       !last && 'border-b-0',
       last && 'rounded-b',
       first && 'border-t-0'

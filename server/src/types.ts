@@ -62,6 +62,38 @@ export type Link = {
   defaultTags?: string[]
 }
 
+export type LinkWithSourceBucketType = Link & { sourceBucketType: BucketType }
+
 export type BucketWithSourceLinks = Bucket & {
   sourceLinks: Link[]
 }
+
+export type VendorEntity = {
+  id: string
+  hash: string
+} & ({
+  vendorEntityType: 'telegram_message'
+  metadata: {
+    chatId: number
+    messageId: number
+  }
+})
+
+export type Note = {
+  content: string
+  tags: string[]
+  vendorEntity?: VendorEntity
+} & ({
+  noteType: 'notion_page'
+  metadata: {
+    pageId: string
+  }
+} | {
+  noteType: 'telegram_message'
+  metadata: {
+    chatId: number
+    messageId: number
+  }
+})
+
+export type Require<T, K extends keyof T> = T & { [P in K]-?: T[P] }

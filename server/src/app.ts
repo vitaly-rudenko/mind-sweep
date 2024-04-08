@@ -1,5 +1,4 @@
 import pg from 'pg'
-import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import Router from 'express-promise-router'
 import express, { type NextFunction, type Request, type Response } from 'express'
@@ -14,16 +13,22 @@ import { getAppVersion } from './common/utils.js'
 import { localize } from './localization/localize.js'
 import { withChatId } from './common/telegram.js'
 import { withLocale } from './localization/telegram.js'
-import { createWebAppUrlGenerator } from './web-app/utils.js'
+import { checkWebAppSignature, createWebAppUrlGenerator } from './web-app/utils.js'
 import { ApiError, NotAuthenticatedError, NotFoundError } from './common/errors.js'
 import { withUserId } from './users/telegram.js'
 import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
-import { Client } from '@notionhq/client'
 import { message } from 'telegraf/filters'
-import type { Message } from 'telegraf/types'
 import { match } from './match.js'
+import { parseTelegramMessage, createTelegramVendorEntity } from './utils.js'
+import { authenticateWebAppSchema, initDataUserSchema } from './web-app/schemas.js'
+import { createIntegrationsRouter } from './integrations/routes.js'
+import { createLinksRouter } from './links/routes.js'
+import { createBucketsRouter } from './buckets/routes.js'
+import type { Note, Require, VendorEntity } from './types.js'
+import { NotionBucket } from './notion/notion-bucket.js'
+import { stripIndent } from 'common-tags'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -55,11 +60,13 @@ async function start() {
   process.once('SIGINT', () => bot.stop('SIGINT'))
   process.once('SIGTERM', () => bot.stop('SIGTERM'))
 
+  const botInfo = await bot.telegram.getMe()
+
   registry.values({
     webAppName: env.WEB_APP_NAME,
     webAppUrl: env.WEB_APP_URL,
     debugChatId: env.DEBUG_CHAT_ID,
-    botInfo: await bot.telegram.getMe(),
+    botInfo,
     localize,
     telegram: bot.telegram,
     version: getAppVersion(),
@@ -95,7 +102,19 @@ async function start() {
   bot.use(withLocale())
 
   const storage = new PostgresStorage(pgClient)
-  const botInfo = await bot.telegram.getMe()
+
+  registry.values({ storage })
+
+  bot.command('app', async (context) => {
+    await context.reply(generateWebAppUrl())
+  })
+
+  bot.command('debug', async (context) => {
+    await context.reply(stripIndent`
+      Chat ID: ${context.chat.id} (${context.chat.type})
+      User ID: ${context.from?.id ?? 'unknown'}
+    `)
+  })
 
   bot.command('start', async (context) => {
     const user = await storage.getUserByLoginMethod('telegram', String(context.from.id))
@@ -147,97 +166,37 @@ async function start() {
     return next()
   })
 
-  const TAGGED_MESSAGE_TEXT_REGEX = /^(?<content>.+?)(?:\n\n(?<tags>(?:#\w+\s*)+))?$/s
-
-  function parseTelegramMessage(message: Pick<Message.TextMessage, 'text' | 'entities'>): { content: string; tags: string[] } {
-    const match = message.text.match(TAGGED_MESSAGE_TEXT_REGEX)
-
-    return {
-      content: match?.groups?.content ?? '',
-      tags: extractTagsFromMessage(message),
-    }
-  }
-
-  function extractTagsFromMessage(message: Pick<Message.TextMessage, 'text' | 'entities'>): string[] {
-    return [...new Set(
-      (message.entities ?? [])
-      .filter(entity => entity.type === 'hashtag')
-      .map(entity => message.text.slice(entity.offset + 1, entity.offset + entity.length))
-      .map(tag => tag.replaceAll('_', ' '))
-    )]
-  }
-
-  function createVendorEntityHash(input: string) {
-    return crypto.createHash('md5').update(input).digest('hex')
-  }
+  const notionBucket = new NotionBucket(storage)
 
   bot.on(message('text'), async (context) => {
     const { content, tags } = parseTelegramMessage(context.message)
+
+    const vendorEntity: VendorEntity = createTelegramVendorEntity(context.message)
 
     const links = await storage.queryLinksByMirrorBucket(context.state.user.id, 'telegram_chat', String(context.chat.id))
 
     for (const link of links) {
       if (link.template && match(content, link.template) === undefined) continue
 
-      const sourceBucket = await storage.getBucketById(context.state.user.id, link.sourceBucketId)
-      if (!sourceBucket) continue
-      const integration = await storage.getIntegrationById(context.state.user.id, sourceBucket.integrationId)
-      if (!integration) continue
-
-      if (integration.integrationType === 'notion' && sourceBucket.bucketType === 'notion_database') {
-        const notion = new Client({ auth: integration.metadata.integrationSecret });
-        const notionDatabase = await notion.databases.retrieve({ database_id: sourceBucket.metadata.databaseId });
-
-        const vendorEntityId = `${context.message.chat.id}_${context.message.message_id}`
-        const vendorEntityHash = createVendorEntityHash(context.message.text)
-        const vendorEntityMetadata = {
-          chatId: context.message.chat.id,
+      const note: Require<Note, 'vendorEntity'> = {
+        content,
+        tags: [...tags, ...link.defaultTags ?? []],
+        vendorEntity,
+        noteType: 'telegram_message',
+        metadata: {
+          chatId: context.chat.id,
           messageId: context.message.message_id,
         }
+      }
 
-        await notion.pages.create({
-          parent: { database_id: notionDatabase.id },
-          properties: {
-            'Name': {
-              type: 'title',
-              title: [
-                {
-                  type: 'text',
-                  text: {
-                    content: content,
-                  },
-                },
-              ],
-            },
-            'Tags': {
-              type: 'multi_select',
-              multi_select: [...tags, ...link.defaultTags ?? []].map((tag) => ({ name: tag })),
-            },
-            'Status': {
-              type: 'select',
-              select: {
-                name: 'Not started'
-              },
-            },
-            'entity:telegram_message': {
-              type: 'rich_text',
-              rich_text: [
-                {
-                  type: 'text',
-                  text: {
-                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
-                  },
-                },
-              ],
-            }
-          },
+      if (link.sourceBucketType === 'notion_database') {
+        await notionBucket.createNote({
+          note,
+          userId: context.state.user.id,
+          bucketId: link.sourceBucketId,
         })
       }
     }
-  })
-
-  bot.command('app', async (context) => {
-    await context.reply(generateWebAppUrl())
   })
 
   const app = express()
@@ -258,13 +217,6 @@ async function start() {
   app.use(express.json())
 
   const router = Router()
-
-  const authenticateWebAppSchema = z.object({ initData: z.string() })
-  const initDataUserSchema = z.object({
-    id: z.number(),
-    first_name: z.string(),
-    username: z.string().optional(),
-  })
 
   router.post('/authenticate-web-app', async (req, res) => {
     const { initData } = authenticateWebAppSchema.parse(req.body)
@@ -323,277 +275,10 @@ async function start() {
 
   router.use(createAuthMiddleware({ tokenSecret: env.TOKEN_SECRET }))
 
-  const createIntegrationSchema = z.discriminatedUnion('integrationType', [
-    z.object({
-      integrationType: z.literal('notion'),
-      name: z.string().optional(),
-      metadata: z.object({
-        integrationSecret: z.string().min(1),
-      })
-    }),
-    z.object({
-      integrationType: z.literal('telegram'),
-      name: z.string().optional(),
-      metadata: z.object({
-        initData: z.string().min(1),
-      })
-    })
-  ]);
-
-  router.post('/integrations', async (req, res) => {
-    const input = createIntegrationSchema.parse(req.body)
-
-    if (input.integrationType === 'notion') {
-      const notion = new Client({ auth: input.metadata.integrationSecret });
-      const notionUser = await notion.users.me({});
-
-      await storage.createIntegration({
-        integrationType: 'notion',
-        name: input.name || notionUser.name || 'Notion',
-        userId: req.user.id,
-        queryId: notionUser.id,
-        metadata: {
-          userId: notionUser.id,
-          integrationSecret: input.metadata.integrationSecret,
-        }
-      })
-    } else if (input.integrationType === 'telegram') {
-      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
-        throw new ApiError({
-          code: 'INVALID_SIGNATURE',
-          status: 400,
-        })
-      }
-
-      const initDataUser = new URLSearchParams(input.metadata.initData).get('user')
-      const telegramUser = initDataUser ? initDataUserSchema.parse(JSON.parse(initDataUser)) : undefined
-      if (!telegramUser) {
-        throw new ApiError({
-          code: 'INVALID_INIT_DATA',
-          status: 400,
-        })
-      }
-
-      await storage.createIntegration({
-        integrationType: 'telegram',
-        name: input.name || formatTelegramUserName(telegramUser),
-        userId: req.user.id,
-        queryId: String(telegramUser.id),
-        metadata: {
-          userId: telegramUser.id,
-        }
-      })
-    } else {
-      throw new ApiError({
-        code: 'UNSUPPORTED_INTEGRATION_TYPE',
-        status: 400,
-      })
-    }
-
-    res.sendStatus(201)
-  })
-
-  router.get('/integrations', async (req, res) => {
-    const integrations = await storage.getIntegrationsByUserId(req.user.id)
-    res.json({ items: integrations })
-  })
-
-  router.delete('/integrations/:id', async (req, res) => {
-    await storage.deleteIntegrationById(req.user.id, Number(req.params.id))
-    res.sendStatus(204)
-  })
-
-  const createBucketSchema = z.discriminatedUnion('bucketType', [
-    z.object({
-      bucketType: z.literal('notion_database'),
-      integrationId: z.number(),
-      name: z.string().optional(),
-      metadata: z.object({
-        databaseId: z.string().min(1),
-      })
-    }),
-    z.object({
-      bucketType: z.literal('telegram_chat'),
-      integrationId: z.number(),
-      name: z.string().optional(),
-      metadata: z.object({
-        initData: z.string().min(1),
-      })
-    })
-  ]);
-
-  router.post('/buckets', async (req, res) => {
-    const input = createBucketSchema.parse(req.body)
-
-    if (input.bucketType === 'notion_database') {
-      const integration = await storage.getIntegrationById(req.user.id, input.integrationId)
-      if (integration?.integrationType !== 'notion') {
-        throw new ApiError({
-          code: 'INVALID_INTEGRATION',
-          status: 400,
-        })
-      }
-
-      const notion = new Client({ auth: integration.metadata.integrationSecret });
-      const notionDatabase = await notion.databases.retrieve({ database_id: input.metadata.databaseId });
-
-      await storage.createBucket({
-        integrationId: input.integrationId,
-        bucketType: 'notion_database',
-        name: input.name || ('title' in notionDatabase && notionDatabase.title[0].plain_text) || 'Notion database',
-        userId: req.user.id,
-        queryId: notionDatabase.id,
-        metadata: {
-          databaseId: notionDatabase.id,
-        }
-      })
-    } else if (input.bucketType === 'telegram_chat') {
-      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
-        throw new ApiError({
-          code: 'INVALID_SIGNATURE',
-          status: 400,
-        })
-      }
-
-      const initDataUser = new URLSearchParams(input.metadata.initData).get('user')
-      const telegramUser = initDataUser ? initDataUserSchema.parse(JSON.parse(initDataUser)) : undefined
-      if (!telegramUser) {
-        throw new ApiError({
-          code: 'INVALID_INIT_DATA',
-          status: 400,
-        })
-      }
-
-      await storage.createBucket({
-        integrationId: input.integrationId,
-        bucketType: 'telegram_chat',
-        name: input.name || formatTelegramUserName(botInfo),
-        userId: req.user.id,
-        queryId: String(telegramUser.id),
-        metadata: {
-          chatId: telegramUser.id,
-        }
-      })
-    } else {
-      throw new ApiError({
-        code: 'UNSUPPORTED_BUCKET_TYPE',
-        status: 400,
-      })
-    }
-
-    res.sendStatus(201)
-  })
-
-  router.get('/buckets', async (req, res) => {
-    const buckets = await storage.getBucketsByUserId(req.user.id)
-    res.json({ items: buckets })
-  })
-
-  router.delete('/buckets/:id', async (req, res) => {
-    await storage.deleteBucketById(req.user.id, Number(req.params.id))
-    res.sendStatus(204)
-  })
-
-  const createLinkSchema = z.object({
-    sourceBucketId: z.number(),
-    mirrorBucketId: z.number(),
-    priority: z.number().min(0).max(100),
-    template: z.string().min(1).optional(),
-    defaultTags: z.array(z.string().min(1)).min(1).optional(),
-  })
-
-  router.post('/links', async (req, res) => {
-    const input = createLinkSchema.parse(req.body)
-
-    await storage.createLink({
-      userId: req.user.id,
-      sourceBucketId: input.sourceBucketId,
-      mirrorBucketId: input.mirrorBucketId,
-      priority: input.priority,
-      template: input.template,
-      defaultTags: input.defaultTags,
-    })
-
-    res.sendStatus(201)
-  })
-
-  router.delete('/links/:id', async (req, res) => {
-    await storage.deleteLinkById(req.user.id, Number(req.params.id))
-    res.sendStatus(204)
-  })
-
-  const SERIALIZED_VENDOR_ENTITY_REGEX = /^(.+?):(\{.+\}):(.+)$/
-
-  router.post('/links/:id/sync', async (req, res) => {
-    const link = await storage.getLinkById(req.user.id, Number(req.params.id))
-    if (!link) throw new NotFoundError()
-
-    const mirrorBucket = await storage.getBucketById(req.user.id, link.mirrorBucketId)
-    const sourceBucket = await storage.getBucketById(req.user.id, link.sourceBucketId)
-    if (!mirrorBucket || !sourceBucket) throw new NotFoundError()
-
-    if (sourceBucket.bucketType !== 'notion_database' || mirrorBucket.bucketType !== 'telegram_chat') {
-      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
-    }
-
-    const mirrorIntegration = await storage.getIntegrationById(req.user.id, mirrorBucket.integrationId)
-    const sourceIntegration = await storage.getIntegrationById(req.user.id, sourceBucket.integrationId)
-    if (!mirrorIntegration || !sourceIntegration) throw new NotFoundError()
-
-    if (sourceIntegration.integrationType !== 'notion' || mirrorIntegration.integrationType !== 'telegram') {
-      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
-    }
-
-    const notion = new Client({ auth: sourceIntegration.metadata.integrationSecret });
-    const pages = await notion.databases.query({
-      database_id: sourceBucket.metadata.databaseId,
-    });
-
-    for (const page of pages.results) {
-      if (page.object !== 'page' || !('properties' in page)) continue
-
-      const nameProperty = page.properties['Name']
-      if (!nameProperty || nameProperty.type !== 'title') continue
-
-      const content = nameProperty.title[0].plain_text
-      if (link.template && match(content, link.template) === undefined) continue
-
-      const telegramMessageProperty = page.properties['entity:telegram_message']
-      if (!telegramMessageProperty || telegramMessageProperty.type !== 'rich_text') continue
-
-      if (!telegramMessageProperty?.rich_text?.[0]?.plain_text) {
-        const message = await bot.telegram.sendMessage(mirrorBucket.metadata.chatId, content)
-
-        const vendorEntityId = `${message.chat.id}_${message.message_id}`
-        const vendorEntityHash = createVendorEntityHash(message.text)
-        const vendorEntityMetadata = {
-          chatId: message.chat.id,
-          messageId: message.message_id,
-        }
-
-        await notion.pages.update({
-          page_id: page.id,
-          properties: {
-            'entity:telegram_message': {
-              type: 'rich_text',
-              rich_text: [
-                {
-                  type: 'text',
-                  text: {
-                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
-                  },
-                },
-              ],
-            }
-          },
-        })
-      }
-    }
-
-    res.sendStatus(200)
-  })
-
   app.use(router)
+  app.use(createIntegrationsRouter())
+  app.use(createBucketsRouter())
+  app.use(createLinksRouter())
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     // TODO: test "err instanceof ZodError"
@@ -661,26 +346,6 @@ async function start() {
     logger.fatal({ err }, 'Could not launch telegram bot')
     process.exit(1)
   })
-}
-
-// https://gist.github.com/konstantin24121/49da5d8023532d66cc4db1136435a885?permalink_comment_id=4574538#gistcomment-4574538
-function checkWebAppSignature(botToken: string, initData: string) {
-  const urlParams = new URLSearchParams(initData)
-
-  const hash = urlParams.get('hash')
-  urlParams.delete('hash')
-  urlParams.sort()
-
-  let dataCheckString = ''
-  for (const [key, value] of urlParams.entries()) {
-      dataCheckString += `${key}=${value}\n`
-  }
-  dataCheckString = dataCheckString.slice(0, -1)
-
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken)
-  const calculatedHash = crypto.createHmac('sha256', secret.digest()).update(dataCheckString).digest('hex')
-
-  return calculatedHash === hash
 }
 
 start()

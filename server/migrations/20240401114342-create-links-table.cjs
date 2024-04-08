@@ -15,8 +15,8 @@ const up = wrapInTransaction(async (client) => {
 
   await client.query(`
     CREATE UNIQUE INDEX
-      ON links (user_id, source_bucket_id, mirror_bucket_id, template)
-      NULLS NOT DISTINCT;
+      ON links (user_id, source_bucket_id, mirror_bucket_id)
+      WHERE template IS NULL;
   `)
 })
 

@@ -13,7 +13,7 @@ const up = wrapInTransaction(async (client) => {
   // Avoid duplicate integrations per user
   await client.query(`
     CREATE UNIQUE INDEX integrations_user_id_query_id_idx
-      ON integrations (user_id, query_id);
+      ON integrations (user_id, integration_type, query_id);
   `)
 })
 

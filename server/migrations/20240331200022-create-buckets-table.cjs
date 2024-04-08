@@ -14,7 +14,7 @@ const up = wrapInTransaction(async (client) => {
   // Avoid duplicate buckets per user
   await client.query(`
     CREATE UNIQUE INDEX buckets_user_id_query_id_idx
-      ON buckets (user_id, query_id);
+      ON buckets (user_id, bucket_type, query_id);
   `)
 
   await client.query(`

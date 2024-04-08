@@ -1,5 +1,5 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, BucketWithSourceLinks, Integration, IntegrationType, Link, LoginMethod, LoginMethodType } from '../types.js'
+import type { Bucket, BucketType, BucketWithSourceLinks, Integration, IntegrationType, Link, LinkWithSourceBucketType, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
 import { AlreadyExistsError, ApiError } from '../common/errors.js'
 
@@ -42,6 +42,7 @@ type LinkRow = {
   id: number
   user_id: number
   source_bucket_id: number
+  source_bucket_type?: string
   mirror_bucket_id: number
   priority: number
   template: string | null
@@ -234,19 +235,20 @@ export class PostgresStorage {
     userId: number,
     mirrorBucketType: BucketType,
     mirrorBucketQueryId: string,
-  ): Promise<Link[]> {
+  ): Promise<LinkWithSourceBucketType[]> {
     const { rows } = await this.client.query<LinkRow>(`
-      SELECT l.*
+      SELECT l.*, b.bucket_type AS source_bucket_type
       FROM links l
-      WHERE user_id = $1
+      INNER JOIN buckets b ON l.source_bucket_id = b.id
+      WHERE l.user_id = $1
         AND mirror_bucket_id = (
           SELECT id
-          FROM buckets
-          WHERE user_id = $1 AND bucket_type = $2 AND query_id = $3
+          FROM buckets b
+          WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3
         );
     `, [userId, mirrorBucketType, mirrorBucketQueryId])
 
-    return rows.map(row => this.deserializeLink(row))
+    return rows.map(row => this.deserializeLinkWithSourceBucketType(row))
   }
 
   async getBucketById(userId: number, bucketId: number): Promise<Bucket | undefined> {
@@ -267,6 +269,28 @@ export class PostgresStorage {
     `, [userId, linkId])
 
     return rows[0] ? this.deserializeLink(rows[0]) : undefined
+  }
+
+  async getBucketAndIntegrationMetadata<B extends BucketType, I extends IntegrationType>(
+    userId: number,
+    bucketId: number,
+    bucketType: B,
+    integrationType: I,
+  ) {
+    const { rows } = await this.client.query(`
+      SELECT b.metadata as bucket_metadata, i.metadata AS integration_metadata
+      FROM buckets b
+      INNER JOIN integrations i ON b.integration_id = i.id
+      WHERE b.user_id = $1 AND b.id = $2 AND b.bucket_type = $3 AND i.integration_type = $4;
+    `, [userId, bucketId, bucketType, integrationType])
+
+    return rows[0] ? {
+      bucketMetadata: rows[0].bucket_metadata,
+      integrationMetadata: rows[0].integration_metadata,
+    } as {
+      bucketMetadata: Extract<Bucket, { bucketType: B }>['metadata']
+      integrationMetadata: Extract<Integration, { integrationType: I }>['metadata']
+    } : undefined
   }
 
   deserializeBucket(row: BucketRow) {
@@ -298,5 +322,12 @@ export class PostgresStorage {
       template: row.template ?? undefined,
       defaultTags: row.default_tags ?? undefined,
     }
+  }
+
+  deserializeLinkWithSourceBucketType(row: LinkRow): LinkWithSourceBucketType {
+    return {
+      ...this.deserializeLink(row),
+      sourceBucketType: row.source_bucket_type,
+    } as LinkWithSourceBucketType
   }
 }
