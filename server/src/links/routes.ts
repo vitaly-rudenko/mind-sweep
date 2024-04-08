@@ -1,10 +1,10 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
 import { registry } from '../registry.js'
-import { ApiError, NotFoundError } from '../common/errors.js'
-import { Client } from '@notionhq/client'
-import { match } from '../match.js'
-import { createVendorEntityHash } from '../utils.js'
+import { NotFoundError } from '../common/errors.js'
+import { createTelegramVendorEntity } from '../utils.js'
+import { NotionBucket } from '../notion/notion-bucket.js'
+import type { Note, VendorEntity } from '../types.js'
 
 const createLinkSchema = z.object({
   sourceBucketId: z.number(),
@@ -39,6 +39,8 @@ export function createLinksRouter() {
     res.sendStatus(204)
   })
 
+  const notionBucket = new NotionBucket(storage)
+
   router.post('/links/:id/sync', async (req, res) => {
     const link = await storage.getLinkById(req.user.id, Number(req.params.id))
     if (!link) throw new NotFoundError()
@@ -47,60 +49,35 @@ export function createLinksRouter() {
     const sourceBucket = await storage.getBucketById(req.user.id, link.sourceBucketId)
     if (!mirrorBucket || !sourceBucket) throw new NotFoundError()
 
-    if (sourceBucket.bucketType !== 'notion_database' || mirrorBucket.bucketType !== 'telegram_chat') {
-      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
+    let notes: Note[]
+    if (sourceBucket.bucketType === 'notion_database') {
+      notes = await notionBucket.read({
+        bucketId: sourceBucket.id,
+        template: link.template,
+        userId: req.user.id,
+      })
+    } else {
+      throw new Error('Unsupported source bucket type')
     }
 
-    const mirrorIntegration = await storage.getIntegrationById(req.user.id, mirrorBucket.integrationId)
-    const sourceIntegration = await storage.getIntegrationById(req.user.id, sourceBucket.integrationId)
-    if (!mirrorIntegration || !sourceIntegration) throw new NotFoundError()
-
-    if (sourceIntegration.integrationType !== 'notion' || mirrorIntegration.integrationType !== 'telegram') {
-      throw new ApiError({ code: 'BAD_REQUEST', status: 400 })
-    }
-
-    const notion = new Client({ auth: sourceIntegration.metadata.integrationSecret });
-    const pages = await notion.databases.query({
-      database_id: sourceBucket.metadata.databaseId,
-    });
-
-    for (const page of pages.results) {
-      if (page.object !== 'page' || !('properties' in page)) continue
-
-      const nameProperty = page.properties['Name']
-      if (!nameProperty || nameProperty.type !== 'title') continue
-
-      const content = nameProperty.title[0].plain_text
-      if (link.template && match(content, link.template) === undefined) continue
-
-      const telegramMessageProperty = page.properties['entity:telegram_message']
-      if (!telegramMessageProperty || telegramMessageProperty.type !== 'rich_text') continue
-
-      if (!telegramMessageProperty?.rich_text?.[0]?.plain_text) {
-        const message = await telegram.sendMessage(mirrorBucket.metadata.chatId, content)
-
-        const vendorEntityId = `${message.chat.id}_${message.message_id}`
-        const vendorEntityHash = createVendorEntityHash(message.text)
-        const vendorEntityMetadata = {
-          chatId: message.chat.id,
-          messageId: message.message_id,
+    for (const note of notes) {
+      if (!note.vendorEntity) {
+        let vendorEntity: VendorEntity
+        if (mirrorBucket.bucketType === 'telegram_chat') {
+          const message = await telegram.sendMessage(mirrorBucket.metadata.chatId, note.content)
+          vendorEntity = createTelegramVendorEntity(message)
+        } else {
+          throw new Error('Unsupported mirror bucket type')
         }
 
-        await notion.pages.update({
-          page_id: page.id,
-          properties: {
-            'entity:telegram_message': {
-              type: 'rich_text',
-              rich_text: [
-                {
-                  type: 'text',
-                  text: {
-                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
-                  },
-                },
-              ],
-            }
-          },
+        if (note.noteType !== 'notion_page') {
+          throw new Error('Invalid note')
+        }
+
+        await notionBucket.updateNote({
+          note: { ...note, vendorEntity },
+          bucketId: sourceBucket.id,
+          userId: req.user.id,
         })
       }
     }
