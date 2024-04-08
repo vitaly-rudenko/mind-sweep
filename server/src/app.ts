@@ -1,5 +1,4 @@
 import pg from 'pg'
-import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import Router from 'express-promise-router'
 import express, { type NextFunction, type Request, type Response } from 'express'
@@ -20,15 +19,15 @@ import { withUserId } from './users/telegram.js'
 import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
-import { Client } from '@notionhq/client'
 import { message } from 'telegraf/filters'
-import type { Message } from 'telegraf/types'
 import { match } from './match.js'
-import { parseTelegramMessage, createVendorEntityHash } from './utils.js'
+import { parseTelegramMessage, createTelegramVendorEntity } from './utils.js'
 import { authenticateWebAppSchema, initDataUserSchema } from './web-app/schemas.js'
 import { createIntegrationsRouter } from './integrations/routes.js'
 import { createLinksRouter } from './links/routes.js'
 import { createBucketsRouter } from './buckets/routes.js'
+import type { Note, Require, VendorEntity } from './types.js'
+import { NotionBucket } from './notion/notion-bucket.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -155,66 +154,34 @@ async function start() {
     return next()
   })
 
+  const notionBucket = new NotionBucket(storage)
+
   bot.on(message('text'), async (context) => {
     const { content, tags } = parseTelegramMessage(context.message)
+
+    const vendorEntity: VendorEntity = createTelegramVendorEntity(context.message)
 
     const links = await storage.queryLinksByMirrorBucket(context.state.user.id, 'telegram_chat', String(context.chat.id))
 
     for (const link of links) {
       if (link.template && match(content, link.template) === undefined) continue
 
-      const sourceBucket = await storage.getBucketById(context.state.user.id, link.sourceBucketId)
-      if (!sourceBucket) continue
-      const integration = await storage.getIntegrationById(context.state.user.id, sourceBucket.integrationId)
-      if (!integration) continue
-
-      if (integration.integrationType === 'notion' && sourceBucket.bucketType === 'notion_database') {
-        const notion = new Client({ auth: integration.metadata.integrationSecret });
-        const notionDatabase = await notion.databases.retrieve({ database_id: sourceBucket.metadata.databaseId });
-
-        const vendorEntityId = `${context.message.chat.id}_${context.message.message_id}`
-        const vendorEntityHash = createVendorEntityHash(context.message.text)
-        const vendorEntityMetadata = {
-          chatId: context.message.chat.id,
+      const note: Require<Note, 'vendorEntity'> = {
+        content,
+        tags: [...tags, ...link.defaultTags ?? []],
+        vendorEntity,
+        noteType: 'telegram_message',
+        metadata: {
+          chatId: context.chat.id,
           messageId: context.message.message_id,
         }
+      }
 
-        await notion.pages.create({
-          parent: { database_id: notionDatabase.id },
-          properties: {
-            'Name': {
-              type: 'title',
-              title: [
-                {
-                  type: 'text',
-                  text: {
-                    content: content,
-                  },
-                },
-              ],
-            },
-            'Tags': {
-              type: 'multi_select',
-              multi_select: [...tags, ...link.defaultTags ?? []].map((tag) => ({ name: tag })),
-            },
-            'Status': {
-              type: 'select',
-              select: {
-                name: 'Not started'
-              },
-            },
-            'entity:telegram_message': {
-              type: 'rich_text',
-              rich_text: [
-                {
-                  type: 'text',
-                  text: {
-                    content: `${vendorEntityId}:${JSON.stringify(vendorEntityMetadata)}:${vendorEntityHash}`,
-                  },
-                },
-              ],
-            }
-          },
+      if (link.sourceBucketType === 'notion_database') {
+        await notionBucket.createNote({
+          note,
+          userId: context.state.user.id,
+          bucketId: link.sourceBucketId,
         })
       }
     }
