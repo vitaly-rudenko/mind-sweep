@@ -201,22 +201,22 @@ async function start() {
     const { content, tags } = parseTelegramMessage(context.message)
 
     const note: Note = {
-        content,
+      content,
       tags,
       vendorEntity: createTelegramVendorEntity(context.message),
-        noteType: 'telegram_message',
-        metadata: {
+      noteType: 'telegram_message',
+      metadata: {
         chatId: context.message.chat.id,
-          messageId: context.message.message_id,
+        messageId: context.message.message_id,
       },
-      }
+    }
 
     await $onNewNote({
-          note,
-          userId: context.state.user.id,
+      note,
+      userId: context.state.user.id,
       mirrorBucketType: 'telegram_chat',
       mirrorBucketQueryId: String(context.message.chat.id),
-        })
+    })
   })
 
   const app = express()

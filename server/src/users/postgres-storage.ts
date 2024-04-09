@@ -271,28 +271,6 @@ export class PostgresStorage {
     return rows[0] ? this.deserializeLink(rows[0]) : undefined
   }
 
-  async getBucketAndIntegrationMetadata<B extends BucketType, I extends IntegrationType>(
-    userId: number,
-    bucketId: number,
-    bucketType: B,
-    integrationType: I,
-  ) {
-    const { rows } = await this.client.query(`
-      SELECT b.metadata as bucket_metadata, i.metadata AS integration_metadata
-      FROM buckets b
-      INNER JOIN integrations i ON b.integration_id = i.id
-      WHERE b.user_id = $1 AND b.id = $2 AND b.bucket_type = $3 AND i.integration_type = $4;
-    `, [userId, bucketId, bucketType, integrationType])
-
-    return rows[0] ? {
-      bucketMetadata: rows[0].bucket_metadata,
-      integrationMetadata: rows[0].integration_metadata,
-    } as {
-      bucketMetadata: Extract<Bucket, { bucketType: B }>['metadata']
-      integrationMetadata: Extract<Integration, { integrationType: I }>['metadata']
-    } : undefined
-  }
-
   deserializeBucket(row: BucketRow) {
     return {
       id: row.id,
