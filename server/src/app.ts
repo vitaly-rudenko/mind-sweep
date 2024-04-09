@@ -26,7 +26,7 @@ import { authenticateWebAppSchema, initDataUserSchema } from './web-app/schemas.
 import { createIntegrationsRouter } from './integrations/routes.js'
 import { createLinksRouter } from './links/routes.js'
 import { createBucketsRouter } from './buckets/routes.js'
-import type { Note, Require, VendorEntity } from './types.js'
+import type { BucketType, Note } from './types.js'
 import { NotionBucket } from './notion/notion-bucket.js'
 import { stripIndent } from 'common-tags'
 
@@ -168,35 +168,55 @@ async function start() {
 
   const notionBucket = new NotionBucket(storage)
 
+  // Agnostic function
+  async function $createNote(payload: { note: Note; userId: number; sourceBucketType: BucketType; sourceBucketId: number }) {
+    const { note, userId, sourceBucketType, sourceBucketId } = payload
+
+    if (sourceBucketType === 'notion_database') {
+      await notionBucket.createNote({
+        note,
+        userId,
+        bucketId: sourceBucketId,
+      })
+    }
+  }
+
+  // Agnostic function
+  async function $onNewNote(payload: { note: Note; userId: number; mirrorBucketType: BucketType; mirrorBucketQueryId: string }) {
+    const { note, userId, mirrorBucketType, mirrorBucketQueryId } = payload
+
+    const links = await storage.queryLinksByMirrorBucket(userId, mirrorBucketType, mirrorBucketQueryId)
+    for (const link of links) {
+      if (link.template && match(note.content, link.template) === undefined) continue
+
+      if (link.defaultTags) {
+        note.tags.push(...link.defaultTags)
+      }
+
+      await $createNote({ note, userId, sourceBucketType: link.sourceBucketType, sourceBucketId: link.sourceBucketId })
+    }
+  }
+
   bot.on(message('text'), async (context) => {
     const { content, tags } = parseTelegramMessage(context.message)
 
-    const vendorEntity: VendorEntity = createTelegramVendorEntity(context.message)
-
-    const links = await storage.queryLinksByMirrorBucket(context.state.user.id, 'telegram_chat', String(context.chat.id))
-
-    for (const link of links) {
-      if (link.template && match(content, link.template) === undefined) continue
-
-      const note: Require<Note, 'vendorEntity'> = {
+    const note: Note = {
         content,
-        tags: [...tags, ...link.defaultTags ?? []],
-        vendorEntity,
+      tags,
+      vendorEntity: createTelegramVendorEntity(context.message),
         noteType: 'telegram_message',
         metadata: {
-          chatId: context.chat.id,
+        chatId: context.message.chat.id,
           messageId: context.message.message_id,
-        }
+      },
       }
 
-      if (link.sourceBucketType === 'notion_database') {
-        await notionBucket.createNote({
+    await $onNewNote({
           note,
           userId: context.state.user.id,
-          bucketId: link.sourceBucketId,
+      mirrorBucketType: 'telegram_chat',
+      mirrorBucketQueryId: String(context.message.chat.id),
         })
-      }
-    }
   })
 
   const app = express()
