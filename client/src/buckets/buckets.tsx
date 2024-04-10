@@ -98,10 +98,11 @@ export const Buckets: FC = () => {
         <Button variant='link' onClick={() => setEditorOpen(true)} className='pr-0'>Add Bucket</Button>
       </div>
       <div className='flex flex-col gap-8'>
-        {!!data && data.items.map((bucket) => (
+        {!!data && data.items.map(({ bucket, sourceLinks }) => (
           <BucketComponent key={bucket.id}
-            buckets={data.items}
+            buckets={data.items.map(({ bucket }) => bucket)}
             bucket={bucket}
+            sourceLinks={sourceLinks}
             onLink={() => setSelectedBucket(bucket)}
             onDelete={() => setDeleteId(bucket.id)}
             onSyncLink={handleSyncLink}
@@ -115,16 +116,17 @@ export const Buckets: FC = () => {
 
 const BucketComponent: FC<{
   buckets: Bucket[]
+  sourceLinks: Link[]
   bucket: Bucket
   onLink: () => void
   onDelete: () => void
   onSyncLink: (link: Link) => void
   onDeleteLink: (link: Link) => void
-}> = ({ buckets, bucket, onLink, onDelete, onDeleteLink, onSyncLink }) => {
+}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onDeleteLink, onSyncLink }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <div className='flex flex-col gap-0'>
-    <Card className={cn('overflow-hidden', bucket.sourceLinks.length > 0 && 'rounded-br-none')}>
+    <Card className={cn('overflow-hidden', sourceLinks.length > 0 && 'rounded-br-none')}>
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
           <div className='truncate'>{bucket.name}</div>
@@ -139,8 +141,15 @@ const BucketComponent: FC<{
       </div>
     </Card>
     <div className='flex flex-col gap-0'>
-      {bucket.sourceLinks.map((link, i, arr) => (
-        <LinkComponent key={link.id} buckets={buckets} link={link} first={i === 0} last={i === arr.length - 1} onDelete={() => onDeleteLink(link)} onSync={() => onSyncLink(link)} />
+      {sourceLinks.map((link, i) => (
+        <LinkComponent key={link.id}
+          buckets={buckets}
+          link={link}
+          first={i === 0}
+          last={i === sourceLinks.length - 1}
+          onDelete={() => onDeleteLink(link)}
+          onSync={() => onSyncLink(link)}
+        />
       ))}
       <div className='flex items-center gap-2 pt-2 pl-2'>
         <CornerDownRight className='inline size-6 shrink-0 text-primary' />

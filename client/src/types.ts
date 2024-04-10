@@ -38,7 +38,6 @@ export type Bucket<T extends BucketType = BucketType> = {
   bucketType: T
   metadata: BucketMetadata[T]
   integrationId: number
-  sourceLinks: Link[]
 }
 
 export type LoginMethodType = 'telegram'

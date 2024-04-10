@@ -18,7 +18,7 @@ import { ApiError } from '@/utils/api'
 import { useWebApp } from '@/web-app/hooks'
 import { useIntegrationsQuery } from '@/integrations/api'
 import { IntegrationCombobox } from '@/integrations/integration-combobox'
-import type { BucketType, Integration, IntegrationType } from '@/types'
+import type { BucketType, Integration } from '@/types'
 import { bucketTypeName } from './bucket-type-name'
 
 type FormState = {

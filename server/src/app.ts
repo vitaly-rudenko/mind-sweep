@@ -169,15 +169,20 @@ async function start() {
   const notionBucket = new NotionBucket(storage)
 
   // Agnostic function
-  async function $createNote(payload: { note: Note; userId: number; sourceBucketType: BucketType; sourceBucketId: number }) {
-    const { note, userId, sourceBucketType, sourceBucketId } = payload
+  async function $createNote(payload: { note: Note; userId: number; sourceBucketId: number }) {
+    const { note, userId, sourceBucketId } = payload
 
-    if (sourceBucketType === 'notion_database') {
+    const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
+    if (!sourceBucket) throw new Error(`Bucket with ID ${sourceBucketId} not found`)
+
+    if (sourceBucket.bucketType === 'notion_database') {
       await notionBucket.createNote({
         note,
         userId,
-        bucketId: sourceBucketId,
+        bucketId: sourceBucket.id,
       })
+    } else {
+      throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
     }
   }
 
@@ -193,7 +198,7 @@ async function start() {
         note.tags.push(...link.defaultTags)
       }
 
-      await $createNote({ note, userId, sourceBucketType: link.sourceBucketType, sourceBucketId: link.sourceBucketId })
+      await $createNote({ note, userId, sourceBucketId: link.sourceBucketId })
     }
   }
 

@@ -62,12 +62,6 @@ export type Link = {
   defaultTags?: string[]
 }
 
-export type LinkWithSourceBucketType = Link & { sourceBucketType: BucketType }
-
-export type BucketWithSourceLinks = Bucket & {
-  sourceLinks: Link[]
-}
-
 export type VendorEntity = {
   id: string
   hash: string
@@ -78,6 +72,8 @@ export type VendorEntity = {
     messageId: number
   }
 })
+
+export type VendorEntityType = VendorEntity['vendorEntityType']
 
 export type Note = {
   content: string
@@ -95,3 +91,5 @@ export type Note = {
     messageId: number
   }
 })
+
+export type NoteType = Note['noteType']

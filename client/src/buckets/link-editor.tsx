@@ -12,7 +12,7 @@ import { type FC, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Form, FormField, FormItem } from '@/components/form'
 import { createToast, dismissToast } from '@/utils/toast'
-import { useBucketsQuery, useCreateLinkMutation } from './api'
+import { useCreateLinkMutation } from './api'
 import { ApiError } from '@/utils/api'
 import type { Bucket } from '@/types'
 import { BucketCombobox } from './bucket-combobox'
@@ -42,7 +42,6 @@ export const LinkEditor: FC<{
   open: boolean
   onClose: () => void
 }> = ({ sourceBucket, mirrorBucket, open, onClose }) => {
-  const { data: buckets } = useBucketsQuery()
   const createMutation = useCreateLinkMutation()
 
   const form = useForm<FormState>({ defaultValues })
@@ -92,8 +91,6 @@ export const LinkEditor: FC<{
       })
     }
   }, [form, open, mirrorBucket, sourceBucket])
-
-  if (!buckets) return null
 
   return (
     <Drawer open={open} onOpenChange={(open) => !open && onClose()} dismissible={false}>
