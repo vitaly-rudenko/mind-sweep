@@ -168,6 +168,8 @@ async function start() {
 
   const notionBucket = new NotionBucket(storage)
 
+  registry.values({ notionBucket })
+
   // Agnostic function
   async function $createNote(payload: { note: Note; userId: number; sourceBucketId: number }) {
     const { note, userId, sourceBucketId } = payload
