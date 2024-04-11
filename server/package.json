@@ -5,8 +5,9 @@
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --delay 1 --watch src --ext \"js,ts,json\" --exec \"npm run build && npm run start\"",
+    "dev": "nodemon --delay 1 --watch src --ext \"js,ts,json\" --exec \"npm run build && npm run debug\"",
     "build": "tsc",
+    "debug": "node --inspect --enable-source-maps --env-file=.env dist/app.js",
     "start": "node --enable-source-maps --env-file=.env dist/app.js",
     "test": "jest",
     "umzug": "node --env-file=.env dist/umzug/cli.js"
