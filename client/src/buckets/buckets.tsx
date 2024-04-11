@@ -129,7 +129,7 @@ const BucketComponent: FC<{
     <Card className={cn('overflow-hidden', sourceLinks.length > 0 && 'rounded-br-none')}>
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
-          <div className='truncate'>{bucket.name}</div>
+          <div className='truncate leading-normal'>{bucket.name}</div>
           <CardDescription className='whitespace-nowrap text-primary'>{bucketTypeName(bucket.bucketType)}</CardDescription>
         </CardTitle>
       </CardHeader>
@@ -184,7 +184,7 @@ const LinkComponent: FC<{
     )}>
       <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
-          <div className='truncate'>{sourceBucket.name}</div>
+          <div className='truncate leading-normal'>{sourceBucket.name}</div>
           <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
         </CardTitle>
       </CardHeader>
