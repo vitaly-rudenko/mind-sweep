@@ -29,6 +29,7 @@ import { createBucketsRouter } from './buckets/routes.js'
 import type { BucketType, Note } from './types.js'
 import { NotionBucket } from './notion/notion-bucket.js'
 import { stripIndent } from 'common-tags'
+import { agnosticHandleNewNote } from './agnostic_handle_new_note.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -170,40 +171,6 @@ async function start() {
 
   registry.values({ notionBucket })
 
-  // Agnostic function
-  async function $createNote(payload: { note: Note; userId: number; sourceBucketId: number }) {
-    const { note, userId, sourceBucketId } = payload
-
-    const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
-    if (!sourceBucket) throw new Error(`Bucket with ID ${sourceBucketId} not found`)
-
-    if (sourceBucket.bucketType === 'notion_database') {
-      await notionBucket.createNote({
-        note,
-        userId,
-        bucketId: sourceBucket.id,
-      })
-    } else {
-      throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
-    }
-  }
-
-  // Agnostic function
-  async function $onNewNote(payload: { note: Note; userId: number; mirrorBucketType: BucketType; mirrorBucketQueryId: string }) {
-    const { note, userId, mirrorBucketType, mirrorBucketQueryId } = payload
-
-    const links = await storage.queryLinksByMirrorBucket(userId, mirrorBucketType, mirrorBucketQueryId)
-    for (const link of links) {
-      if (link.template && match(note.content, link.template) === undefined) continue
-
-      if (link.defaultTags) {
-        note.tags.push(...link.defaultTags)
-      }
-
-      await $createNote({ note, userId, sourceBucketId: link.sourceBucketId })
-    }
-  }
-
   bot.on(message('text'), async (context) => {
     const { content, tags } = parseTelegramMessage(context.message)
 
@@ -218,7 +185,7 @@ async function start() {
       },
     }
 
-    await $onNewNote({
+    await agnosticHandleNewNote({
       note,
       userId: context.state.user.id,
       mirrorBucketType: 'telegram_chat',
