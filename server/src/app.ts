@@ -173,17 +173,21 @@ async function start() {
   bot.on(message('text'), async (context) => {
     const { content, tags } = parseTelegramMessage(context.message)
 
+    const userId = context.state.user.id
     const note: Note = {
       content,
       tags,
       mirrorVendorEntity: createTelegramVendorEntity(context.message),
     }
 
+    // TODO: move this to handler for more reliability?
+    const mirrorBucket = await storage.getBucketByQueryId(userId, 'telegram_chat', String(context.chat.id))
+    if (!mirrorBucket) return
+
     await agnosticHandleNewNote({
       note,
-      userId: context.state.user.id,
-      mirrorBucketType: 'telegram_chat',
-      mirrorBucketQueryId: String(context.message.chat.id),
+      userId,
+      mirrorBucketId: mirrorBucket.id,
     })
   })
 

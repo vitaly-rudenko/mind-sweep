@@ -234,21 +234,12 @@ export class PostgresStorage {
     await this.client.query('DELETE FROM links WHERE user_id = $1 AND id = $2;', [userId, linkId])
   }
 
-  async queryLinksByMirrorBucket(
-    userId: number,
-    mirrorBucketType: BucketType,
-    mirrorBucketQueryId: string,
-  ): Promise<Link[]> {
+  async getLinksByMirrorBucketId(userId: number, mirrorBucketId: number): Promise<Link[]> {
     const { rows } = await this.client.query<LinkRow>(`
       SELECT l.*
       FROM links l
-      WHERE l.user_id = $1
-        AND mirror_bucket_id = (
-          SELECT id
-          FROM buckets b
-          WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3
-        );
-    `, [userId, mirrorBucketType, mirrorBucketQueryId])
+      WHERE l.user_id = $1 AND mirror_bucket_id = $2;
+    `, [userId, mirrorBucketId])
 
     return rows.map(row => this.deserializeLink(row))
   }
@@ -259,6 +250,16 @@ export class PostgresStorage {
       FROM buckets b
       WHERE b.user_id = $1 AND b.id = $2;
     `, [userId, bucketId])
+
+    return rows[0] ? this.deserializeBucket(rows[0]) : undefined
+  }
+
+  async getBucketByQueryId(userId: number, bucketType: BucketType, queryId: string): Promise<Bucket | undefined> {
+    const { rows } = await this.client.query<BucketRow>(`
+      SELECT b.*
+      FROM buckets b
+      WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3;
+    `, [userId, bucketType, queryId])
 
     return rows[0] ? this.deserializeBucket(rows[0]) : undefined
   }

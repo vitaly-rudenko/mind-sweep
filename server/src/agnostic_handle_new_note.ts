@@ -1,15 +1,15 @@
 import { match } from './match.js'
 import { registry, type Deps } from './registry.js'
-import type { Note, BucketType } from './types.js'
+import type { Note } from './types.js'
 
 // Agnostic function
 export async function agnosticHandleNewNote(
-  payload: { note: Note; userId: number; mirrorBucketType: BucketType; mirrorBucketQueryId: string },
+  payload: { note: Note; userId: number; mirrorBucketId: number },
   { storage }: Deps<'storage'> = registry.export()
 ) {
-  const { note, userId, mirrorBucketType, mirrorBucketQueryId } = payload
+  const { note, userId, mirrorBucketId } = payload
 
-  const links = await storage.queryLinksByMirrorBucket(userId, mirrorBucketType, mirrorBucketQueryId)
+  const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucketId)
   for (const link of links) {
     if (link.template && match(note.content, link.template) === undefined) continue
 
