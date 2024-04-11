@@ -20,13 +20,12 @@ import { ZodError, z } from 'zod'
 import { PostgresStorage } from './users/postgres-storage.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
 import { message } from 'telegraf/filters'
-import { match } from './match.js'
 import { parseTelegramMessage, createTelegramVendorEntity } from './utils.js'
 import { authenticateWebAppSchema, initDataUserSchema } from './web-app/schemas.js'
 import { createIntegrationsRouter } from './integrations/routes.js'
 import { createLinksRouter } from './links/routes.js'
 import { createBucketsRouter } from './buckets/routes.js'
-import type { BucketType, Note } from './types.js'
+import type { Note } from './types.js'
 import { NotionBucket } from './notion/notion-bucket.js'
 import { stripIndent } from 'common-tags'
 import { agnosticHandleNewNote } from './agnostic_handle_new_note.js'
@@ -177,12 +176,7 @@ async function start() {
     const note: Note = {
       content,
       tags,
-      vendorEntity: createTelegramVendorEntity(context.message),
-      noteType: 'telegram_message',
-      metadata: {
-        chatId: context.message.chat.id,
-        messageId: context.message.message_id,
-      },
+      mirrorVendorEntity: createTelegramVendorEntity(context.message),
     }
 
     await agnosticHandleNewNote({
@@ -275,7 +269,6 @@ async function start() {
   app.use(createLinksRouter())
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-    // TODO: test "err instanceof ZodError"
     if (!(err instanceof ApiError) && !(err instanceof ZodError)) {
       logger.error({
         err,

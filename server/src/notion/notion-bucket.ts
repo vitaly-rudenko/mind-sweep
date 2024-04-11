@@ -2,7 +2,7 @@ import { Client } from '@notionhq/client'
 import type { Bucket, Integration, Note, VendorEntity } from '../types.js'
 import type { PostgresStorage } from '../users/postgres-storage.js'
 import { match } from '../match.js'
-import { parseVendorEntity } from '../utils.js'
+import { createVendorEntityHash, parseVendorEntity } from '../utils.js'
 
 export class NotionBucket {
   constructor(
@@ -38,23 +38,29 @@ export class NotionBucket {
         throw new Error(`Page does not have valid Tags property: ${page.id}`)
       }
 
-      const vendorEntityProperty = page.properties['mind_sweep:vendor_entity']
-      if (!vendorEntityProperty || vendorEntityProperty.type !== 'rich_text') {
-        throw new Error(`Page does not have valid VendorEntity property: ${page.id}`)
+      const mirrorVendorEntityProperty = page.properties['mind_sweep:mirror_vendor_entity']
+      if (!mirrorVendorEntityProperty || mirrorVendorEntityProperty.type !== 'rich_text') {
+        throw new Error(`Page does not have valid MirrorVendorEntity property: ${page.id}`)
       }
 
-      let vendorEntity: VendorEntity | undefined
-      if (vendorEntityProperty.rich_text?.[0]?.plain_text) {
-        vendorEntity = parseVendorEntity(vendorEntityProperty.rich_text[0].plain_text)
+      const content = nameProperty.title[0].plain_text
+
+      let mirrorVendorEntity: VendorEntity | undefined
+      if (mirrorVendorEntityProperty.rich_text?.[0]?.plain_text) {
+        mirrorVendorEntity = parseVendorEntity(mirrorVendorEntityProperty.rich_text[0].plain_text)
       }
 
       notes.push({
-        content: nameProperty.title[0].plain_text,
+        content,
         tags: tagsProperty.multi_select.map(tag => tag.name),
-        vendorEntity,
-        noteType: 'notion_page',
-        metadata: {
-          pageId: page.id,
+        mirrorVendorEntity,
+        sourceVendorEntity: {
+          id: `${bucket.metadata.databaseId}_${page.id}`,
+          vendorEntityType: 'notion_page',
+          metadata: {
+            pageId: page.id,
+          },
+          hash: createVendorEntityHash(content),
         },
       })
     }
@@ -92,14 +98,14 @@ export class NotionBucket {
           type: 'multi_select',
           multi_select: note.tags.map(tag => ({ name: tag })),
         },
-        ...note.vendorEntity && {
-          'mind_sweep:vendor_entity': {
+        ...note.mirrorVendorEntity && {
+          'mind_sweep:mirror_vendor_entity': {
             type: 'rich_text',
             rich_text: [
               {
                 type: 'text',
                 text: {
-                  content: `${note.vendorEntity.vendorEntityType}:${note.vendorEntity.id}:${JSON.stringify(note.vendorEntity.metadata)}:${note.vendorEntity.hash}`,
+                  content: `${note.mirrorVendorEntity.vendorEntityType}:${note.mirrorVendorEntity.id}:${JSON.stringify(note.mirrorVendorEntity.metadata)}:${note.mirrorVendorEntity.hash}`,
                 },
               },
             ],
@@ -112,7 +118,8 @@ export class NotionBucket {
   async updateNote(input: { note: Note, bucketId: number, userId: number }) {
     const { note, bucketId, userId } = input
 
-    if (note.noteType !== 'notion_page') throw new Error(`Unsupported note type: ${note.noteType}`)
+    if (!note.sourceVendorEntity) throw new Error('Note has no source vendor entity')
+    if (note.sourceVendorEntity.vendorEntityType !== 'notion_page') throw new Error(`Unsupported note type: ${note.sourceVendorEntity.vendorEntityType}`)
 
     const bucket = await this.storage.getBucketById(userId, bucketId)
     if (!bucket) throw new Error(`Bucket not found: ${bucketId}`)
@@ -124,7 +131,7 @@ export class NotionBucket {
 
     await this.client.pages.update({
       auth: integration.metadata.integrationSecret,
-      page_id: note.metadata.pageId,
+      page_id: note.sourceVendorEntity.metadata.pageId,
       properties: {
         'Name': {
           type: 'title',
@@ -141,14 +148,14 @@ export class NotionBucket {
           type: 'multi_select',
           multi_select: note.tags.map(tag => ({ name: tag })),
         },
-        ...note.vendorEntity && {
-          'mind_sweep:vendor_entity': {
+        ...note.mirrorVendorEntity && {
+          'mind_sweep:mirror_vendor_entity': {
             type: 'rich_text',
             rich_text: [
               {
                 type: 'text',
                 text: {
-                  content: `${note.vendorEntity.vendorEntityType}:${note.vendorEntity.id}:${JSON.stringify(note.vendorEntity.metadata)}:${note.vendorEntity.hash}`,
+                  content: `${note.mirrorVendorEntity.vendorEntityType}:${note.mirrorVendorEntity.id}:${JSON.stringify(note.mirrorVendorEntity.metadata)}:${note.mirrorVendorEntity.hash}`,
                 },
               },
             ],

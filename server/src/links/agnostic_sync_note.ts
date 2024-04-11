@@ -5,7 +5,7 @@ import { createTelegramVendorEntity, createVendorEntityHash } from '../utils.js'
 import { TelegramError } from 'telegraf'
 import { logger } from '../common/logger.js'
 
-export async function agnosticSyncNote(payload: {
+export async function syncNote(payload: {
   note: Note
   link: Link
   userId: number
@@ -17,21 +17,21 @@ export async function agnosticSyncNote(payload: {
   const mirrorBucket = await storage.getBucketById(userId, link.mirrorBucketId)
   if (!mirrorBucket) throw new Error(`Bucket not found: ${link.mirrorBucketId}`)
 
-  if (note.vendorEntity) {
-    if (note.vendorEntity.hash !== createVendorEntityHash(note.content)) {
-      const vendorEntity = await updateVendorEntity({ note })
+  if (note.mirrorVendorEntity) {
+    if (note.mirrorVendorEntity.hash !== createVendorEntityHash(note.content)) {
+      const mirrorVendorEntity = await updateMirrorVendorEntity({ note })
 
       await updateNote({
-        note: { ...note, vendorEntity },
+        note: { ...note, mirrorVendorEntity },
         sourceBucketId: link.sourceBucketId,
         userId,
       })
     }
   } else {
-    const vendorEntity = await createVendorEntity({ note, mirrorBucket })
+    const mirrorVendorEntity = await createMirrorVendorEntity({ note, mirrorBucket })
 
     await updateNote({
-      note: { ...note, vendorEntity },
+      note: { ...note, mirrorVendorEntity },
       sourceBucketId: link.sourceBucketId,
       userId,
     })
@@ -44,7 +44,9 @@ async function updateNote(payload: { note: Note; sourceBucketId: number; userId:
 
   const { note, sourceBucketId, userId } = payload
 
-  if (note.noteType === 'notion_page') {
+  if (!note.sourceVendorEntity) throw new Error('Note has no source vendor entity')
+
+  if (note.sourceVendorEntity.vendorEntityType === 'notion_page') {
     await notionBucket.updateNote({ note, bucketId: sourceBucketId, userId })
   } else {
     throw new Error('Unsupported note type')
@@ -52,24 +54,25 @@ async function updateNote(payload: { note: Note; sourceBucketId: number; userId:
 }
 
 // Vendor selector function
-async function updateVendorEntity(input: { note: Note }, { telegram }: Deps<'telegram'>= registry.export()): Promise<VendorEntity> {
-  logger.info({ input }, 'Updating vendor entity')
+async function updateMirrorVendorEntity(input: { note: Note }, { telegram }: Deps<'telegram'>= registry.export()): Promise<VendorEntity> {
+  logger.info({ input }, 'Updating mirror vendor entity')
 
   const { note } = input
-  if (!note.vendorEntity) throw new Error('Note has no vendor entity')
 
-  if (note.vendorEntity.vendorEntityType === 'telegram_message') {
+  if (!note.mirrorVendorEntity) throw new Error('Note has no source vendor entity')
+
+  if (note.mirrorVendorEntity.vendorEntityType === 'telegram_message') {
     try {
-      let message: Message.TextMessage | true = await telegram.editMessageText(note.vendorEntity.metadata.chatId, note.vendorEntity.metadata.messageId, undefined, note.content)
+      let message: Message.TextMessage | true = await telegram.editMessageText(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId, undefined, note.content)
       if (message !== true) {
         return createTelegramVendorEntity(message)
       }
     } catch (err) {
       if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be edited') {
-        const message = await telegram.sendMessage(note.vendorEntity.metadata.chatId, note.content, {
+        const message = await telegram.sendMessage(note.mirrorVendorEntity.metadata.chatId, note.content, {
           reply_parameters: {
-            chat_id: note.vendorEntity.metadata.chatId,
-            message_id: note.vendorEntity.metadata.messageId,
+            chat_id: note.mirrorVendorEntity.metadata.chatId,
+            message_id: note.mirrorVendorEntity.metadata.messageId,
           }
         })
 
@@ -82,7 +85,7 @@ async function updateVendorEntity(input: { note: Note }, { telegram }: Deps<'tel
     }
 
     return {
-      ...note.vendorEntity,
+      ...note.mirrorVendorEntity,
       hash: createVendorEntityHash(note.content),
     }
   } else {
@@ -91,8 +94,8 @@ async function updateVendorEntity(input: { note: Note }, { telegram }: Deps<'tel
 }
 
 // Vendor selector function
-async function createVendorEntity(input: { note: Note; mirrorBucket: Bucket }, { telegram }: Deps<'telegram'>= registry.export()): Promise<VendorEntity> {
-  logger.info({ input }, 'Creating vendor entity')
+async function createMirrorVendorEntity(input: { note: Note; mirrorBucket: Bucket }, { telegram }: Deps<'telegram'>= registry.export()): Promise<VendorEntity> {
+  logger.info({ input }, 'Creating mirror vendor entity')
 
   const { note, mirrorBucket } = input
 

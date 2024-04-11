@@ -71,6 +71,11 @@ export type VendorEntity = {
     chatId: number
     messageId: number
   }
+} | {
+  vendorEntityType: 'notion_page'
+  metadata: {
+    pageId: string
+  }
 })
 
 export type VendorEntityType = VendorEntity['vendorEntityType']
@@ -78,18 +83,6 @@ export type VendorEntityType = VendorEntity['vendorEntityType']
 export type Note = {
   content: string
   tags: string[]
-  vendorEntity?: VendorEntity
-} & ({
-  noteType: 'notion_page'
-  metadata: {
-    pageId: string
-  }
-} | {
-  noteType: 'telegram_message'
-  metadata: {
-    chatId: number
-    messageId: number
-  }
-})
-
-export type NoteType = Note['noteType']
+  sourceVendorEntity?: VendorEntity
+  mirrorVendorEntity?: VendorEntity
+}
