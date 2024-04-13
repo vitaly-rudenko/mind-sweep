@@ -144,4 +144,3 @@ dist/
 .DS_Store
 .postgresql
 docker-compose.override.yml
-nginx/certificates/

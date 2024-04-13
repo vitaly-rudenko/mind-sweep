@@ -1,25 +1,5 @@
 version: '3.7'
 services:
-  ms_nginx:
-    container_name: ms_nginx
-    restart: unless-stopped
-    build:
-      context: nginx
-      dockerfile: Dockerfile
-      args:
-        APP_URL: "http://ms_app:3000"
-        DOMAIN: "$DOMAIN"
-        SUBDOMAIN: "$SUBDOMAIN"
-    depends_on:
-      - ms_app
-    volumes:
-      - "./nginx/certificates/letsencrypt:/etc/letsencrypt:ro"
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - "ms_network"
-
   ms_app:
     container_name: ms_app
     restart: unless-stopped
@@ -44,7 +24,7 @@ services:
       LOG_LEVEL: "info"
       DEBUG_CHAT_ID: "$DEBUG_CHAT_ID"
     networks:
-      - "ms_network"
+      - "global_network"
 
   ms_postgres:
     container_name: ms_postgres
@@ -57,23 +37,11 @@ services:
     volumes:
       - "./.postgresql/data:/var/lib/postgresql/data"
     networks:
-      - "ms_network"
+      - "global_network"
 
   ms_redis:
     container_name: ms_redis
     restart: unless-stopped
     image: redis
     networks:
-      - "ms_network"
-
-  ms_certbot:
-    container_name: certbot
-    image: certbot/certbot
-    volumes:
-      - "./nginx/certificates/letsencrypt:/etc/letsencrypt:delegated"
-      - "./nginx/certificates/certbot/www:/var/www/certbot:delegated"
-      - "./nginx/logs/misc/letsencrypt:/var/log/letsencrypt:delegated"
-
-networks:
-  ms_network:
-    driver: bridge
+      - "global_network"
