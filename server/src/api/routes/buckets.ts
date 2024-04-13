@@ -1,12 +1,12 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
-import { registry } from '../registry.js'
-import { ApiError } from '../common/errors.js'
-import { env } from '../env.js'
-import { formatTelegramUserName } from '../format-telegram-user-name.js'
-import { initDataUserSchema } from '../web-app/schemas.js'
-import { checkWebAppSignature } from '../web-app/utils.js'
+import { registry } from '../../registry.js'
+import { env } from '../../env.js'
+import { formatTelegramUserName } from '../../telegram/format-telegram-user-name.js'
+import { initDataUserSchema } from '../../web-app/schemas.js'
 import { Client } from '@notionhq/client'
+import { ApiError } from '../../errors.js'
+import { checkWebAppSignature } from '../../web-app/check-web-app-signature.js'
 
 const createBucketSchema = z.discriminatedUnion('bucketType', [
   z.object({
@@ -59,7 +59,7 @@ export function createBucketsRouter() {
         }
       })
     } else if (input.bucketType === 'telegram_chat') {
-      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
+      if (!checkWebAppSignature(input.metadata.initData)) {
         throw new ApiError({
           code: 'INVALID_SIGNATURE',
           status: 400,

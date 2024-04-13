@@ -1,15 +1,8 @@
 import crypto from 'crypto'
-import type { Deps } from '../registry.js'
-
-export function createWebAppUrlGenerator({ botInfo, webAppName }: Deps<'botInfo' | 'webAppName'>) {
-  return (command?: string) => {
-    const query = command ? `?startapp=${command}` : ''
-    return `https://t.me/${botInfo.username}/${webAppName}${query}`
-  }
-}
+import { registry, type Deps } from '../registry.js'
 
 // https://gist.github.com/konstantin24121/49da5d8023532d66cc4db1136435a885?permalink_comment_id=4574538#gistcomment-4574538
-export function checkWebAppSignature(botToken: string, initData: string) {
+export function checkWebAppSignature(initData: string, { botToken }: Deps<'botToken'> = registry.export()) {
   const urlParams = new URLSearchParams(initData)
 
   const hash = urlParams.get('hash')

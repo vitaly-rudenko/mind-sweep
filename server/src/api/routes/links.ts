@@ -1,11 +1,11 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
-import { registry } from '../registry.js'
-import { NotFoundError } from '../common/errors.js'
-import { NotionBucket } from '../notion/notion-bucket.js'
-import type { Note } from '../types.js'
-import { match } from '../match.js'
-import { syncNote } from './agnostic_sync_note.js'
+import { registry } from '../../registry.js'
+import { NotionBucket } from '../../notion/notion-bucket.js'
+import { match } from '../../templates/match.js'
+import { NotFoundError } from '../../errors.js'
+import { syncNote } from '../../notes/sync-note.js'
+import type { Note } from '../../notes/types.js'
 
 const createLinkSchema = z.object({
   sourceBucketId: z.number(),

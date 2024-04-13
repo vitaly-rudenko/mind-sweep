@@ -1,7 +1,10 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketQuery, BucketType, Integration, Link, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
-import { AlreadyExistsError, ApiError } from '../common/errors.js'
+import type { Bucket, BucketQuery } from './buckets/types.js'
+import { AlreadyExistsError, ApiError } from './errors.js'
+import type { Integration } from './integrations/types.js'
+import type { Link } from './links/types.js'
+import type { LoginMethod, LoginMethodType } from './login-methods/types.js'
 
 type UserRow = {
   id: number

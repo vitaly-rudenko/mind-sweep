@@ -1,8 +1,14 @@
 import { Client } from '@notionhq/client'
-import type { Bucket, Integration, Note, VendorEntity, VendorEntityQuery, VendorEntityType } from '../types.js'
-import type { PostgresStorage } from '../users/postgres-storage.js'
-import { createVendorEntityHash, parseVendorEntity } from '../utils.js'
+import type { PostgresStorage } from '../postgres-storage.js'
 import type { PageObjectResponse, PartialPageObjectResponse, PartialDatabaseObjectResponse, DatabaseObjectResponse, UpdatePageParameters, CreatePageParameters } from '@notionhq/client/build/src/api-endpoints.js'
+import type { Bucket } from '../buckets/types.js'
+import type { Integration } from '../integrations/types.js'
+import type { Note } from '../notes/types.js'
+import type { VendorEntityQuery, VendorEntity } from '../vendor-entities/types.js'
+import { serializeNotionMirrorVendorEntity } from './serialize-notion-mirror-vendor-entity.js'
+import { deserializeNotionMirrorVendorEntity } from './deserialize-notion-mirror-vendor-entity.js'
+import { createVendorEntityHash } from '../vendor-entities/create-vendor-entity-hash.js'
+import { createNotionVendorEntity } from './create-notion-vendor-entity.js'
 
 type Page = PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse
 
@@ -139,7 +145,7 @@ export class NotionBucket {
             {
               type: 'text',
               text: {
-                content: `${note.mirrorVendorEntity.vendorEntityType}:${note.mirrorVendorEntity.id}:${JSON.stringify(note.mirrorVendorEntity.metadata)}:${note.mirrorVendorEntity.hash}`,
+                content: serializeNotionMirrorVendorEntity(note.mirrorVendorEntity),
               },
             },
           ],
@@ -172,21 +178,14 @@ export class NotionBucket {
 
     let mirrorVendorEntity: VendorEntity | undefined
     if (mirrorVendorEntityProperty.rich_text?.[0]?.plain_text) {
-      mirrorVendorEntity = parseVendorEntity(mirrorVendorEntityProperty.rich_text[0].plain_text)
+      mirrorVendorEntity = deserializeNotionMirrorVendorEntity(mirrorVendorEntityProperty.rich_text[0].plain_text)
     }
 
     return {
       content,
       tags: tagsProperty.multi_select.map(tag => tag.name),
       mirrorVendorEntity,
-      sourceVendorEntity: {
-        id: `${databaseId}_${page.id}`,
-        vendorEntityType: 'notion_page',
-        metadata: {
-          pageId: page.id,
-        },
-        hash: createVendorEntityHash(content),
-      },
+      sourceVendorEntity: createNotionVendorEntity({ databaseId, pageId: page.id, content }),
     }
   }
 }
