@@ -45,3 +45,7 @@ services:
     image: redis
     networks:
       - "global_network"
+
+networks:
+  global_network:
+    external: true
