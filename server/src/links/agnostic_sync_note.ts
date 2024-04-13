@@ -4,6 +4,7 @@ import type { Note, Link, Bucket, VendorEntity } from '../types.js'
 import { createTelegramVendorEntity, createVendorEntityHash } from '../utils.js'
 import { TelegramError } from 'telegraf'
 import { logger } from '../common/logger.js'
+import { storeNote } from '../agnostic_handle_note.js'
 
 export async function syncNote(payload: {
   note: Note
@@ -21,7 +22,7 @@ export async function syncNote(payload: {
     if (note.mirrorVendorEntity.hash !== createVendorEntityHash(note.content)) {
       const mirrorVendorEntity = await updateMirrorVendorEntity({ note })
 
-      await updateNote({
+      await storeNote({
         note: { ...note, mirrorVendorEntity },
         sourceBucketId: link.sourceBucketId,
         userId,
@@ -30,26 +31,11 @@ export async function syncNote(payload: {
   } else {
     const mirrorVendorEntity = await createMirrorVendorEntity({ note, mirrorBucket })
 
-    await updateNote({
+    await storeNote({
       note: { ...note, mirrorVendorEntity },
       sourceBucketId: link.sourceBucketId,
       userId,
     })
-  }
-}
-
-// Vendor selector function
-async function updateNote(payload: { note: Note; sourceBucketId: number; userId: number }, { notionBucket }: Deps<'notionBucket'> = registry.export()) {
-  logger.info({ payload }, 'Updating note')
-
-  const { note, sourceBucketId, userId } = payload
-
-  if (!note.sourceVendorEntity) throw new Error('Note has no source vendor entity')
-
-  if (note.sourceVendorEntity.vendorEntityType === 'notion_page') {
-    await notionBucket.updateNote({ note, bucketId: sourceBucketId, userId })
-  } else {
-    throw new Error('Unsupported note type')
   }
 }
 

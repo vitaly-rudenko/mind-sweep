@@ -28,7 +28,7 @@ import { createBucketsRouter } from './buckets/routes.js'
 import type { Note } from './types.js'
 import { NotionBucket } from './notion/notion-bucket.js'
 import { stripIndent } from 'common-tags'
-import { agnosticHandleNewNote } from './agnostic_handle_new_note.js'
+import { agnosticStoreNote } from './agnostic_handle_note.js'
 
 async function start() {
   if (env.USE_TEST_MODE) {
@@ -180,15 +180,24 @@ async function start() {
       mirrorVendorEntity: createTelegramVendorEntity(context.message),
     }
 
-    // TODO: move this to handler for more reliability?
-    const mirrorBucket = await storage.getBucketByQueryId(userId, 'telegram_chat', String(context.chat.id))
-    if (!mirrorBucket) return
-
-    await agnosticHandleNewNote({
+    await agnosticStoreNote({
       note,
       userId,
-      mirrorBucketId: mirrorBucket.id,
+      mirrorBucketQuery: {
+        id: `${context.chat.id}`,
+        bucketType: 'telegram_chat',
+      },
+      ...context.message.reply_to_message ? {
+        mirrorVendorEntityQuery: {
+          id: `${context.message.reply_to_message.chat.id}_${context.message.reply_to_message.message_id}`,
+          vendorEntityType: 'telegram_message',
+        }
+      } : {},
     })
+
+    if (context.message.reply_to_message) {
+      await bot.telegram.deleteMessage(context.message.reply_to_message.chat.id, context.message.reply_to_message.message_id)
+    }
   })
 
   const app = express()

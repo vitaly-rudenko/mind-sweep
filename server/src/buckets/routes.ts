@@ -76,20 +76,22 @@ export function createBucketsRouter() {
       }
 
       const chatId = input.metadata.chatId ?? telegramUser.id
-      const chatMember = await telegram.getChatMember(chatId, telegramUser.id)
-      if (chatMember.status !== 'administrator' && chatMember.status !== 'creator')  {
-        throw new ApiError({
-          code: 'USER_IS_NOT_ADMIN',
-          status: 400,
-        })
-      }
-
       const chat = input.metadata.chatId ? await telegram.getChat(chatId) : undefined
-      if (chat && chat.type === 'private') {
-        throw new ApiError({
-          code: 'PRIVATE_CHATS_ARE_NOT_SUPPORTED',
-          status: 400,
-        })
+      if (chat) {
+        if (chat.type === 'private') {
+          throw new ApiError({
+            code: 'PRIVATE_CHATS_ARE_NOT_SUPPORTED',
+            status: 400,
+          })
+        }
+
+        const chatMember = await telegram.getChatMember(chatId, telegramUser.id)
+        if (chatMember.status !== 'administrator' && chatMember.status !== 'creator')  {
+          throw new ApiError({
+            code: 'USER_IS_NOT_ADMIN',
+            status: 400,
+          })
+        }
       }
 
       await storage.createBucket({

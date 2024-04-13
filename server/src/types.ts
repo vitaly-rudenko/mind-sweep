@@ -78,6 +78,8 @@ export type VendorEntity = {
   }
 })
 
+export type VendorEntityQuery = Pick<VendorEntity, 'id' | 'vendorEntityType'>
+
 export type VendorEntityType = VendorEntity['vendorEntityType']
 
 export type Note = {
