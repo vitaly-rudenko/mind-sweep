@@ -1,12 +1,12 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
-import { ApiError } from '../common/errors.js'
-import { env } from '../env.js'
-import { formatTelegramUserName } from '../format-telegram-user-name.js'
+import { env } from '../../env.js'
+import { formatTelegramUserName } from '../../telegram/format-telegram-user-name.js'
 import { Client } from '@notionhq/client'
-import { registry } from '../registry.js'
-import { checkWebAppSignature } from '../web-app/utils.js'
-import { initDataUserSchema } from '../web-app/schemas.js'
+import { registry } from '../../registry.js'
+import { initDataUserSchema } from '../../web-app/schemas.js'
+import { ApiError } from '../../errors.js'
+import { checkWebAppSignature } from '../../web-app/check-web-app-signature.js'
 
 const createIntegrationSchema = z.discriminatedUnion('integrationType', [
   z.object({
@@ -48,7 +48,7 @@ export function createIntegrationsRouter() {
         }
       })
     } else if (input.integrationType === 'telegram') {
-      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
+      if (!checkWebAppSignature(input.metadata.initData)) {
         throw new ApiError({
           code: 'INVALID_SIGNATURE',
           status: 400,

@@ -67,7 +67,7 @@ const Integration: FC<{
   return <Card className='overflow-hidden'>
     <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
       <CardTitle className='flex justify-between items-baseline gap-2'>
-        <div className='truncate'>{integration.name}</div>
+        <div className='truncate leading-normal'>{integration.name}</div>
         <CardDescription className='text-primary whitespace-nowrap'>{integrationTypeName(integration.integrationType)}</CardDescription>
       </CardTitle>
     </CardHeader>

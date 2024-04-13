@@ -44,16 +44,16 @@ export const BucketCombobox: FC<{
           <CommandEmpty>No buckets found.</CommandEmpty>
           <CommandGroup>
             <CommandList>
-              {data?.items.filter((item) => !exclude || exclude.every(e => e.id !== item.id)).map((item) => (
+              {data?.items.filter(({ bucket }) => !exclude || exclude.every(e => e.id !== bucket.id)).map(({ bucket }) => (
                 <CommandItem
                   className='cursor-pointer'
-                  key={item.id}
-                  value={getItemQuery(item)}
+                  key={bucket.id}
+                  value={getItemQuery(bucket)}
                   onSelect={() => {
-                    if (item.id === selected?.id) {
+                    if (bucket.id === selected?.id) {
                       onSelect(undefined)
                     } else {
-                      onSelect(item)
+                      onSelect(bucket)
                     }
 
                     setOpen(false)
@@ -62,10 +62,10 @@ export const BucketCombobox: FC<{
                   <Check
                     className={cn(
                       'mr-2 h-4 w-4 shrink-0',
-                      selected?.id === item.id ? 'opacity-100' : 'opacity-0'
+                      selected?.id === bucket.id ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  <BucketComponent bucket={item} />
+                  <BucketComponent bucket={bucket} />
                 </CommandItem>
               ))}
             </CommandList>

@@ -1,8 +1,8 @@
 import pino from 'pino'
 import build from 'pino-abstract-transport'
 import { Telegraf, TelegramError } from 'telegraf'
-import { escapeMd } from '../telegram.js'
 import { env } from '../../env.js'
+import { escapeMd } from '../../utils/escape-md.js'
 
 export default async function (options: { telegramBotToken: string, debugChatId: number }) {
   const bot = new Telegraf(options.telegramBotToken, { telegram: { testEnv: env.USE_TEST_MODE } })

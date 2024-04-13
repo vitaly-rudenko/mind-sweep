@@ -17,7 +17,7 @@ export const useBucketsQuery = () => {
       const json = await response.json() as { items: unknown[] }
 
       return {
-        items: json.items as (Bucket & { sourceLinks: Link[] })[],
+        items: json.items as ({ bucket: Bucket; sourceLinks: Link[] })[],
       }
     }
   })

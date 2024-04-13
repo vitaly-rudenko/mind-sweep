@@ -1,7 +1,10 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, BucketWithSourceLinks, Integration, IntegrationType, Link, LinkWithSourceBucketType, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
-import { AlreadyExistsError, ApiError } from '../common/errors.js'
+import type { Bucket, BucketQuery } from './buckets/types.js'
+import { AlreadyExistsError, ApiError } from './errors.js'
+import type { Integration } from './integrations/types.js'
+import type { Link } from './links/types.js'
+import type { LoginMethod, LoginMethodType } from './login-methods/types.js'
 
 type UserRow = {
   id: number
@@ -210,7 +213,7 @@ export class PostgresStorage {
     }
   }
 
-  async getBucketsByUserId(userId: number): Promise<BucketWithSourceLinks[]> {
+  async getBucketsByUserId(userId: number): Promise<{ bucket: Bucket; sourceLinks: Link[] }[]> {
     const { rows } = await this.client.query<BucketRow>(`
       SELECT b.id, b.user_id, b.name, b.query_id, b.bucket_type, b.metadata, b.integration_id
         , COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
@@ -220,7 +223,10 @@ export class PostgresStorage {
       GROUP BY b.id;
     `, [userId])
 
-    return rows.map(row => this.deserializeBucketWithSourceLinks(row))
+    return rows.map(row => ({
+      bucket: this.deserializeBucket(row),
+      sourceLinks: row.source_links.map(row => this.deserializeLink(row)),
+    }))
   }
 
   async deleteBucketById(userId: number, bucketId: number): Promise<void> {
@@ -231,24 +237,14 @@ export class PostgresStorage {
     await this.client.query('DELETE FROM links WHERE user_id = $1 AND id = $2;', [userId, linkId])
   }
 
-  async queryLinksByMirrorBucket(
-    userId: number,
-    mirrorBucketType: BucketType,
-    mirrorBucketQueryId: string,
-  ): Promise<LinkWithSourceBucketType[]> {
+  async getLinksByMirrorBucketId(userId: number, mirrorBucketId: number): Promise<Link[]> {
     const { rows } = await this.client.query<LinkRow>(`
-      SELECT l.*, b.bucket_type AS source_bucket_type
+      SELECT l.*
       FROM links l
-      INNER JOIN buckets b ON l.source_bucket_id = b.id
-      WHERE l.user_id = $1
-        AND mirror_bucket_id = (
-          SELECT id
-          FROM buckets b
-          WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3
-        );
-    `, [userId, mirrorBucketType, mirrorBucketQueryId])
+      WHERE l.user_id = $1 AND mirror_bucket_id = $2;
+    `, [userId, mirrorBucketId])
 
-    return rows.map(row => this.deserializeLinkWithSourceBucketType(row))
+    return rows.map(row => this.deserializeLink(row))
   }
 
   async getBucketById(userId: number, bucketId: number): Promise<Bucket | undefined> {
@@ -257,6 +253,16 @@ export class PostgresStorage {
       FROM buckets b
       WHERE b.user_id = $1 AND b.id = $2;
     `, [userId, bucketId])
+
+    return rows[0] ? this.deserializeBucket(rows[0]) : undefined
+  }
+
+  async getBucketByQueryId(userId: number, bucketQuery: BucketQuery): Promise<Bucket | undefined> {
+    const { rows } = await this.client.query<BucketRow>(`
+      SELECT b.*
+      FROM buckets b
+      WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3;
+    `, [userId, bucketQuery.bucketType, bucketQuery.queryId])
 
     return rows[0] ? this.deserializeBucket(rows[0]) : undefined
   }
@@ -271,28 +277,6 @@ export class PostgresStorage {
     return rows[0] ? this.deserializeLink(rows[0]) : undefined
   }
 
-  async getBucketAndIntegrationMetadata<B extends BucketType, I extends IntegrationType>(
-    userId: number,
-    bucketId: number,
-    bucketType: B,
-    integrationType: I,
-  ) {
-    const { rows } = await this.client.query(`
-      SELECT b.metadata as bucket_metadata, i.metadata AS integration_metadata
-      FROM buckets b
-      INNER JOIN integrations i ON b.integration_id = i.id
-      WHERE b.user_id = $1 AND b.id = $2 AND b.bucket_type = $3 AND i.integration_type = $4;
-    `, [userId, bucketId, bucketType, integrationType])
-
-    return rows[0] ? {
-      bucketMetadata: rows[0].bucket_metadata,
-      integrationMetadata: rows[0].integration_metadata,
-    } as {
-      bucketMetadata: Extract<Bucket, { bucketType: B }>['metadata']
-      integrationMetadata: Extract<Integration, { integrationType: I }>['metadata']
-    } : undefined
-  }
-
   deserializeBucket(row: BucketRow) {
     return {
       id: row.id,
@@ -305,13 +289,6 @@ export class PostgresStorage {
     } as Bucket
   }
 
-  deserializeBucketWithSourceLinks(row: BucketRow) {
-    return {
-      ...this.deserializeBucket(row),
-      sourceLinks: row.source_links.map(row => this.deserializeLink(row)),
-    } as BucketWithSourceLinks
-  }
-
   deserializeLink(row: LinkRow): Link {
     return {
       id: row.id,
@@ -322,12 +299,5 @@ export class PostgresStorage {
       template: row.template ?? undefined,
       defaultTags: row.default_tags ?? undefined,
     }
-  }
-
-  deserializeLinkWithSourceBucketType(row: LinkRow): LinkWithSourceBucketType {
-    return {
-      ...this.deserializeLink(row),
-      sourceBucketType: row.source_bucket_type,
-    } as LinkWithSourceBucketType
   }
 }

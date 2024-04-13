@@ -1,12 +1,12 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
-import { registry } from '../registry.js'
-import { ApiError } from '../common/errors.js'
-import { env } from '../env.js'
-import { formatTelegramUserName } from '../format-telegram-user-name.js'
-import { initDataUserSchema } from '../web-app/schemas.js'
-import { checkWebAppSignature } from '../web-app/utils.js'
+import { registry } from '../../registry.js'
+import { env } from '../../env.js'
+import { formatTelegramUserName } from '../../telegram/format-telegram-user-name.js'
+import { initDataUserSchema } from '../../web-app/schemas.js'
 import { Client } from '@notionhq/client'
+import { ApiError } from '../../errors.js'
+import { checkWebAppSignature } from '../../web-app/check-web-app-signature.js'
 
 const createBucketSchema = z.discriminatedUnion('bucketType', [
   z.object({
@@ -59,7 +59,7 @@ export function createBucketsRouter() {
         }
       })
     } else if (input.bucketType === 'telegram_chat') {
-      if (!checkWebAppSignature(env.TELEGRAM_BOT_TOKEN, input.metadata.initData)) {
+      if (!checkWebAppSignature(input.metadata.initData)) {
         throw new ApiError({
           code: 'INVALID_SIGNATURE',
           status: 400,
@@ -76,20 +76,22 @@ export function createBucketsRouter() {
       }
 
       const chatId = input.metadata.chatId ?? telegramUser.id
-      const chatMember = await telegram.getChatMember(chatId, telegramUser.id)
-      if (chatMember.status !== 'administrator' && chatMember.status !== 'creator')  {
-        throw new ApiError({
-          code: 'USER_IS_NOT_ADMIN',
-          status: 400,
-        })
-      }
-
       const chat = input.metadata.chatId ? await telegram.getChat(chatId) : undefined
-      if (chat && chat.type === 'private') {
-        throw new ApiError({
-          code: 'PRIVATE_CHATS_ARE_NOT_SUPPORTED',
-          status: 400,
-        })
+      if (chat) {
+        if (chat.type === 'private') {
+          throw new ApiError({
+            code: 'PRIVATE_CHATS_ARE_NOT_SUPPORTED',
+            status: 400,
+          })
+        }
+
+        const chatMember = await telegram.getChatMember(chatId, telegramUser.id)
+        if (chatMember.status !== 'administrator' && chatMember.status !== 'creator')  {
+          throw new ApiError({
+            code: 'USER_IS_NOT_ADMIN',
+            status: 400,
+          })
+        }
       }
 
       await storage.createBucket({
