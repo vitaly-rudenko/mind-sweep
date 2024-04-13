@@ -1,5 +1,5 @@
 import { type Client } from 'pg'
-import type { Bucket, BucketType, Integration, Link, LoginMethod, LoginMethodType } from '../types.js'
+import type { Bucket, BucketQuery, BucketType, Integration, Link, LoginMethod, LoginMethodType } from '../types.js'
 import type { User } from './user.js'
 import { AlreadyExistsError, ApiError } from '../common/errors.js'
 
@@ -254,12 +254,12 @@ export class PostgresStorage {
     return rows[0] ? this.deserializeBucket(rows[0]) : undefined
   }
 
-  async getBucketByQueryId(userId: number, bucketType: BucketType, queryId: string): Promise<Bucket | undefined> {
+  async getBucketByQueryId(userId: number, bucketQuery: BucketQuery): Promise<Bucket | undefined> {
     const { rows } = await this.client.query<BucketRow>(`
       SELECT b.*
       FROM buckets b
       WHERE b.user_id = $1 AND b.bucket_type = $2 AND b.query_id = $3;
-    `, [userId, bucketType, queryId])
+    `, [userId, bucketQuery.bucketType, bucketQuery.queryId])
 
     return rows[0] ? this.deserializeBucket(rows[0]) : undefined
   }

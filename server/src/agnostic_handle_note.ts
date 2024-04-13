@@ -1,24 +1,21 @@
 import { match } from './match.js'
 import { registry, type Deps } from './registry.js'
-import type { BucketType, Note, VendorEntityQuery, VendorEntityType } from './types.js'
+import type { BucketQuery, BucketType, Note, VendorEntityQuery, VendorEntityType } from './types.js'
 
 // Agnostic function
 export async function agnosticStoreNote(
   payload: {
     note: Note
     userId: number
-    mirrorBucketQuery: {
-      id: string
-      bucketType: BucketType
-    }
+    mirrorBucketQuery: BucketQuery
     mirrorVendorEntityQuery?: VendorEntityQuery
   },
   { storage }: Deps<'storage'> = registry.export()
 ) {
   const { note, userId, mirrorBucketQuery, mirrorVendorEntityQuery } = payload
 
-  const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery.bucketType, mirrorBucketQuery.id)
-  if (!mirrorBucket) throw new Error(`Bucket with query ID ${mirrorBucketQuery.id} not found`)
+  const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
+  if (!mirrorBucket) throw new Error('Bucket not found')
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
   for (const link of links) {
@@ -43,10 +40,7 @@ export async function storeNote(
     note: Note
     userId: number
     sourceBucketId: number
-    mirrorVendorEntityQuery?: {
-      id: string
-      vendorEntityType: VendorEntityType
-    }
+    mirrorVendorEntityQuery?: VendorEntityQuery
   },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
 ) {

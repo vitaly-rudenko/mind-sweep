@@ -38,6 +38,8 @@ export type Bucket = {
 
 export type BucketType = Bucket['bucketType']
 
+export type BucketQuery = Pick<Bucket, 'queryId' | 'bucketType'>
+
 export type LoginMethod = {
   id: number
   userId: number

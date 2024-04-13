@@ -184,7 +184,7 @@ async function start() {
       note,
       userId,
       mirrorBucketQuery: {
-        id: `${context.chat.id}`,
+        queryId: String(context.chat.id),
         bucketType: 'telegram_chat',
       },
       ...context.message.reply_to_message ? {
