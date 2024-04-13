@@ -1,0 +1,9 @@
+#!/bin/bash
+
+sudo docker compose rm -fvs
+
+git pull --quiet
+
+sudo docker compose build --force-rm
+sudo docker compose up -d ms_nginx
+sudo docker compose logs --tail=10000 -f ms_app
