@@ -6,6 +6,7 @@ import { match } from '../../templates/match.js'
 import { NotFoundError } from '../../errors.js'
 import { syncNote } from '../../notes/sync-note.js'
 import type { Note } from '../../notes/types.js'
+import { syncNotes } from '../../notes/sync-notes.js'
 
 const createLinkSchema = z.object({
   sourceBucketId: z.number(),
@@ -40,46 +41,8 @@ export function createLinksRouter() {
     res.sendStatus(204)
   })
 
-  const notionBucket = new NotionBucket(storage)
-
-  // Agnostic function
-  async function getMatchingNotes(input: {
-    userId: number
-    sourceBucketId: number
-    template?: string
-  }): Promise<Note[]> {
-    const { userId, sourceBucketId, template } = input
-
-    const bucket = await storage.getBucketById(userId, sourceBucketId)
-    if (!bucket) throw new Error(`Bucket not found: ${sourceBucketId}`)
-
-    const integration = await storage.getIntegrationById(userId, bucket.integrationId)
-    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
-
-    let notes: Note[]
-    if (bucket.bucketType === 'notion_database' && integration.integrationType === 'notion') {
-      notes = await notionBucket.read({ bucket, integration })
-    } else {
-      throw new Error('Unsupported source bucket type')
-    }
-
-    return notes.filter(note => !template || match(note.content, template))
-  }
-
   router.post('/links/:id/sync', async (req, res) => {
-    const link = await storage.getLinkById(req.user.id, Number(req.params.id))
-    if (!link) throw new NotFoundError()
-
-    const notes = await getMatchingNotes({
-      userId: req.user.id,
-      sourceBucketId: link.sourceBucketId,
-      template: link.template,
-    })
-
-    for (const note of notes) {
-      await syncNote({ note, link, userId: req.user.id })
-    }
-
+    await syncNotes({ linkId: Number(req.params.id), userId: req.user.id })
     res.sendStatus(200)
   })
 

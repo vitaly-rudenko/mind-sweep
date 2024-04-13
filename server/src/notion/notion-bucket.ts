@@ -7,7 +7,6 @@ import type { Note } from '../notes/types.js'
 import type { VendorEntityQuery, VendorEntity } from '../vendor-entities/types.js'
 import { serializeNotionMirrorVendorEntity } from './serialize-notion-mirror-vendor-entity.js'
 import { deserializeNotionMirrorVendorEntity } from './deserialize-notion-mirror-vendor-entity.js'
-import { createVendorEntityHash } from '../vendor-entities/create-vendor-entity-hash.js'
 import { createNotionVendorEntity } from './create-notion-vendor-entity.js'
 
 type Page = PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse
