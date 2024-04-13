@@ -55,12 +55,9 @@ async function updateMirrorVendorEntity(input: { note: Note }, { telegram }: Dep
       }
     } catch (err) {
       if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be edited') {
-        const message = await telegram.sendMessage(note.mirrorVendorEntity.metadata.chatId, note.content, {
-          reply_parameters: {
-            chat_id: note.mirrorVendorEntity.metadata.chatId,
-            message_id: note.mirrorVendorEntity.metadata.messageId,
-          }
-        })
+        const message = await telegram.sendMessage(note.mirrorVendorEntity.metadata.chatId, note.content)
+
+        await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
 
         return createTelegramVendorEntity(message)
       } else if (err instanceof TelegramError && err.response.description === 'Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message') {

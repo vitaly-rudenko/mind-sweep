@@ -4,6 +4,8 @@ import type { PostgresStorage } from '../users/postgres-storage.js'
 import { createVendorEntityHash, parseVendorEntity } from '../utils.js'
 import type { PageObjectResponse, PartialPageObjectResponse, PartialDatabaseObjectResponse, DatabaseObjectResponse, UpdatePageParameters, CreatePageParameters } from '@notionhq/client/build/src/api-endpoints.js'
 
+type Page = PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse
+
 export class NotionBucket {
   constructor(
     private readonly storage: PostgresStorage,
@@ -30,7 +32,7 @@ export class NotionBucket {
     userId: number
     mirrorVendorEntityQuery?: VendorEntityQuery
   }) {
-    const { note, bucketId, userId, mirrorVendorEntityQuery } = input
+    const { note, bucketId, userId } = input
 
     const bucket = await this.storage.getBucketById(userId, bucketId)
     if (!bucket) throw new Error(`Bucket not found: ${bucketId}`)
@@ -40,15 +42,27 @@ export class NotionBucket {
     if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
     if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
 
-    if (mirrorVendorEntityQuery) {
-      const existingPage = await this.getNoteByMirrorVendorEntityQueryId({ integration, bucket, mirrorVendorEntityQuery })
-      if (existingPage) {
-        await this.updateNote({ pageId: existingPage.id, integration, note })
-        return
+    let pageId: string | undefined = note.sourceVendorEntity?.vendorEntityType === 'notion_page'
+      ? note.sourceVendorEntity.metadata.pageId
+      : undefined
+
+    if (!pageId) {
+      const mirrorVendorEntityQuery: VendorEntityQuery | undefined = input.mirrorVendorEntityQuery || note.mirrorVendorEntity
+      if (mirrorVendorEntityQuery) {
+        const page = await this.getNoteByMirrorVendorEntityQueryId({
+          integration,
+          bucket,
+          mirrorVendorEntityQuery,
+        })
+        pageId = page?.id
       }
     }
 
-    await this.createNote({ integration, bucket, note })
+    if (pageId) {
+      await this.updateNote({ pageId, integration, note })
+    } else {
+      await this.createNote({ integration, bucket, note })
+    }
   }
 
   private async createNote(input: {
@@ -83,7 +97,7 @@ export class NotionBucket {
     integration: Extract<Integration, { integrationType: 'notion' }>
     bucket: Extract<Bucket, { bucketType: 'notion_database' }>
     mirrorVendorEntityQuery: VendorEntityQuery
-  }): Promise<PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse | undefined> {
+  }): Promise<Page | undefined> {
     const { mirrorVendorEntityQuery, integration, bucket } = input
 
     const pages = await this.client.databases.query({
