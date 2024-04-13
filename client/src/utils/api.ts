@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 // TODO: move to env
 export const API_URL = window.location.host === 'vitaly-rudenko.github.io'
-  ? 'https://squad-bot.vitaly-rudenko.com'
+  ? 'https://mind-sweep.vitaly-rudenko.com'
   : 'http://192.168.0.101:3000'
 
 const TIMEOUT_MS = 30_000
