@@ -19,4 +19,4 @@ echo "Migrating the database"
 npm run umzug db:migrate
 
 echo "Starting the app"
-node src/app.js
+node dist/app.js

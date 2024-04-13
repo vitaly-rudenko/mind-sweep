@@ -12,6 +12,8 @@ RUN npm ci --omit=optional
 
 COPY . .
 
+RUN npm run build
+
 RUN touch .env
 
 RUN set -ex; \
