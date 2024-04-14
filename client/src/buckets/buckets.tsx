@@ -2,7 +2,7 @@ import { Button } from '@/components/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter, CardContent } from '@/components/card'
 import { useCallback, useEffect, useState, type FC } from 'react'
 import { BucketEditor } from './bucket-editor'
-import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation, useSyncLinkMutation, useSwapLinksMutation } from './api'
+import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation, useSwapLinksMutation, useSyncBucketMutation } from './api'
 import type { Bucket, Bucket as BucketComponent, Link } from '@/types'
 import { createToast, dismissToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
@@ -15,7 +15,7 @@ import { bucketTypeName } from './bucket-type-name'
 export const Buckets: FC = () => {
   const { data, refetch } = useBucketsQuery()
 
-  const syncLinkMutation = useSyncLinkMutation()
+  const syncBucketMutation = useSyncBucketMutation()
   const swapLinksMutation = useSwapLinksMutation()
 
   const [deleteId, setDeleteId] = useState<number>()
@@ -28,13 +28,17 @@ export const Buckets: FC = () => {
   const [selectedBucket, setSelectedBucket] = useState<Bucket>()
   const [selectedLink, setSelectedLink] = useState<Link>()
 
-  const handleSyncLink = useCallback(async (link: Link) => {
-    const toastId = createToast('Initiating sync...', { type: 'loading' })
+  const handleSync = useCallback(async (bucket: Bucket) => {
+    const toastId = createToast('Initiating Notes sync...', {
+      description: bucket.name,
+      type: 'loading',
+    })
 
     try {
-      await syncLinkMutation.mutateAsync(link.id)
-      createToast('Sync has been initiated', {
-        description: 'It might take a few minutes to complete.',
+      await syncBucketMutation.mutateAsync(bucket.id)
+
+      createToast('Notes sync has been initiated', {
+        description: 'It might take a while to complete.',
         type: 'success',
         toastId,
       })
@@ -42,7 +46,7 @@ export const Buckets: FC = () => {
       console.error(err)
       dismissToast(toastId)
     }
-  }, [syncLinkMutation]);
+  }, [syncBucketMutation])
 
   useEffect(() => {
     if (!editorOpen) {
@@ -122,9 +126,9 @@ export const Buckets: FC = () => {
             buckets={data.items.map(({ bucket }) => bucket)}
             bucket={bucket}
             sourceLinks={sourceLinks}
+            onSync={() => handleSync(bucket)}
             onLink={() => setSelectedBucket(bucket)}
             onDelete={() => setDeleteId(bucket.id)}
-            onSyncLink={handleSyncLink}
             onEditLink={(link) => setSelectedLink(link)}
             onSwapLinks={(link1, link2) => swapLinksMutation.mutateAsync({ link1, link2 })}
             onDeleteLink={(link) => setDeleteLinkId(link.id)}
@@ -140,13 +144,17 @@ const BucketComponent: FC<{
   sourceLinks: Link[]
   bucket: Bucket
   onLink: () => void
+  onSync: () => void
   onDelete: () => void
   onEditLink: (link: Link) => void
-  onSyncLink: (link: Link) => void
   onSwapLinks: (link1: Link, link2: Link) => void
   onDeleteLink: (link: Link) => void
-}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onEditLink, onSyncLink, onSwapLinks, onDeleteLink }) => {
+}> = ({ buckets, bucket, sourceLinks, onLink, onSync, onDelete, onEditLink, onSwapLinks, onDeleteLink }) => {
   const [expanded, setExpanded] = useState(false)
+  const [expandedLink, setExpandedLink] = useState<Link>()
+
+  const isMirrorable = bucket.bucketType === 'telegram_chat'
+  const isSourceable = bucket.bucketType === 'notion_database'
 
   return <div className='flex flex-col gap-0'>
     <Card className={cn('overflow-hidden', sourceLinks.length > 0 && 'rounded-br-none')}>
@@ -159,6 +167,7 @@ const BucketComponent: FC<{
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
         <Separator />
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
+          {!!isSourceable && <Button onClick={onSync} variant='link' className='grow basis-1'>Sync all Notes</Button>}
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>
       </div>
@@ -169,42 +178,46 @@ const BucketComponent: FC<{
         const nextLink = i < sourceLinks.length - 1 ? sourceLinks.at(i + 1) : undefined
 
         return <LinkComponent key={link.id}
+          index={i}
           buckets={buckets}
           link={link}
+          expanded={link === expandedLink}
           first={i === 0}
           last={i === sourceLinks.length - 1}
+          onExpand={(expanded) => expanded ? setExpandedLink(link) : setExpandedLink(undefined)}
           onEdit={() => onEditLink(link)}
-          onSync={() => onSyncLink(link)}
           onMoveUp={prevLink ? () => onSwapLinks(link, prevLink) : undefined}
           onMoveDown={nextLink ? () => onSwapLinks(link, nextLink) : undefined}
           onDelete={() => onDeleteLink(link)}
         />
       })}
-      <div className='flex items-center gap-2 pt-2 pl-2'>
+      {!!isMirrorable && <div className='flex items-center gap-2 pt-3 pl-2'>
         <CornerDownRight className='inline size-6 shrink-0 text-primary' />
         <Button variant='link' role='combobox' className='p-0 justify-between h-auto' onClick={onLink}>
           Link to...
         </Button>
-      </div>
+      </div>}
     </div>
   </div>
 }
 
 const LinkComponent: FC<{
+  index: number
   buckets: Bucket[]
   link: Link
   first: boolean
   last: boolean
+  expanded: boolean
+  onExpand: (expanded: boolean) => void
   onEdit: () => void
-  onSync: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
   onDelete: () => void
-}> = ({ buckets, link, first, last, onEdit, onSync, onMoveUp, onMoveDown, onDelete }) => {
-  const [expanded, setExpanded] = useState(false)
-
+}> = ({ index, buckets, link, first, last, expanded, onExpand, onEdit, onMoveUp, onMoveDown, onDelete }) => {
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
   if (!sourceBucket) return null
+
+  const hasContent = Boolean(link.template || link.defaultTags)
 
   return <div className='flex flex-row items-center gap-2 pl-2'>
     <CornerDownRight className='inline size-6 shrink-0 text-primary' />
@@ -214,14 +227,16 @@ const LinkComponent: FC<{
       last && 'rounded-b',
       first && 'border-t-0'
     )}>
-      <CardHeader className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
+      <CardHeader className={cn('cursor-pointer', hasContent && 'pb-0')} onClick={() => onExpand(!expanded)}>
         <CardTitle className='flex justify-between items-baseline gap-2'>
-          <div className='truncate leading-normal'>{sourceBucket.name}</div>
+          <div className='truncate leading-normal'>
+            <div className='text-primary inline-block min-w-4 pr-1'>{index + 1}</div>{sourceBucket.name}
+          </div>
           <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
         </CardTitle>
       </CardHeader>
-      {!!(link.template || link.defaultTags) && (
-        <CardContent className='cursor-pointer' onClick={() => setExpanded(!expanded)}>
+      {!!hasContent && (
+        <CardContent className='cursor-pointer' onClick={() => onExpand(!expanded)}>
           {!!link.template && <div className='text-sm text-primary font-mono'>{link.template}</div>}
           {!!link.defaultTags && <div className='text-sm text-primary'>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</div>}
         </CardContent>
@@ -232,7 +247,6 @@ const LinkComponent: FC<{
           <Button onClick={onMoveUp} disabled={!onMoveUp} variant='link' size='icon' className='min-w-10'><ArrowUp /></Button>
           <Button onClick={onMoveDown} disabled={!onMoveDown} variant='link' size='icon' className='min-w-10'><ArrowDown /></Button>
           <Button onClick={onEdit} variant='link' className='grow basis-1'>Edit</Button>
-          <Button onClick={onSync} variant='link' className='grow basis-1'>Sync</Button>
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>
       </div>

@@ -130,6 +130,7 @@ export const LinkEditor: FC<{
                         placeholder='Select mirror bucket'
                         selected={field.value !== '' ? field.value : undefined}
                         onSelect={(bucket) => form.setValue('mirrorBucket', bucket ?? '')}
+                        disabled
                       />
                     </FormItem>
                   )}

@@ -48,6 +48,19 @@ export const useCreateBucketMutation = () => {
   })
 }
 
+export const useSyncBucketMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await callApi(`/buckets/${id}/syncs`, {
+        method: 'POST',
+        headers: authorizationHeaders(authToken),
+      })
+    }
+  })
+}
+
 export const useDeleteBucketMutation = () => {
   const { authToken } = useRequiredAuth()
 
@@ -153,19 +166,6 @@ export const useDeleteLinkMutation = () => {
     mutationFn: async (id: number) => {
       await callApi(`/links/${id}`, {
         method: 'DELETE',
-        headers: authorizationHeaders(authToken),
-      })
-    }
-  })
-}
-
-export const useSyncLinkMutation = () => {
-  const { authToken } = useRequiredAuth()
-
-  return useMutation({
-    mutationFn: async (id: number) => {
-      await callApi(`/links/${id}/sync`, {
-        method: 'POST',
         headers: authorizationHeaders(authToken),
       })
     }
