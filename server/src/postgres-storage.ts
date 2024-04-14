@@ -55,15 +55,15 @@ type LinkRow = {
 export class PostgresStorage {
   constructor(private readonly client: Client) {}
 
-  async createLink(link: Omit<Link, 'id'>): Promise<Link> {
+  async createLink(link: Omit<Link, 'id' | 'priority'>): Promise<Link> {
     try {
-      const { rows: [{ id }] } = await this.client.query<LinkRow>(`
-        INSERT INTO links (user_id, source_bucket_id, mirror_bucket_id, priority, template, default_tags)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id;
-      `, [link.userId, link.sourceBucketId, link.mirrorBucketId, link.priority, link.template, link.defaultTags])
+      const { rows: [{ id, priority }] } = await this.client.query<LinkRow>(`
+        INSERT INTO links (user_id, mirror_bucket_id, source_bucket_id, template, default_tags, priority)
+        VALUES ($1, $2, $3, $4, $5, get_next_priority($1, $2))
+        RETURNING id, priority;
+      `, [link.userId, link.mirrorBucketId, link.sourceBucketId, link.template, link.defaultTags])
 
-      return { id, ...link }
+      return { id, priority, ...link }
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err) {
         if (err.code === '23505') {
@@ -75,6 +75,16 @@ export class PostgresStorage {
 
       throw err
     }
+  }
+
+  async updateLink(userId: number, linkId: number, link: Omit<Link, 'id' | 'sourceBucketId' | 'mirrorBucketId' | 'userId'>): Promise<void> {
+    await this.client.query(`
+      UPDATE links
+      SET priority = $3
+        , template = $4
+        , default_tags = $5
+      WHERE user_id = $1 AND id = $2;
+    `, [userId, linkId, link.priority, link.template, link.defaultTags])
   }
 
   async createUserWithIntegration(
