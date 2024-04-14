@@ -33,7 +33,11 @@ export async function syncNote(payload: {
     const mirrorVendorEntity = await createMirrorVendorEntity({ note, mirrorBucket })
 
     await storeNote({
-      note: { ...note, mirrorVendorEntity },
+      note: {
+        ...note,
+        tags: [...note.tags, ...link.defaultTags ?? []],
+        mirrorVendorEntity,
+      },
       sourceBucketId: link.sourceBucketId,
       userId,
     })
