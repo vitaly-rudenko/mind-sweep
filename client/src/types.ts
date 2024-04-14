@@ -66,3 +66,26 @@ export type Link = {
   template?: string
   defaultTags?: string[]
 }
+
+export type VendorEntity = {
+  id: string
+  hash: string
+} & ({
+  vendorEntityType: 'telegram_message'
+  metadata: {
+    chatId: number
+    messageId: number
+  }
+} | {
+  vendorEntityType: 'notion_page'
+  metadata: {
+    pageId: string
+  }
+})
+
+export type Note = {
+  content: string
+  tags: string[]
+  sourceVendorEntity?: VendorEntity
+  mirrorVendorEntity?: VendorEntity
+}

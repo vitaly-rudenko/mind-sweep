@@ -141,6 +141,11 @@ export function createBucketsRouter() {
     res.json({ items: buckets })
   })
 
+  router.get('/buckets/:id/notes', async (req, res) => {
+    const notes = await readNotes({ userId: req.user.id, bucketId: Number(req.params.id) })
+    res.json({ items: notes })
+  })
+
   router.delete('/buckets/:id', async (req, res) => {
     await storage.deleteBucketById(req.user.id, Number(req.params.id))
     res.sendStatus(204)

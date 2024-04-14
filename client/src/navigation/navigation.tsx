@@ -9,6 +9,7 @@ import { cn } from '@/utils/cn'
 import { Moon, MoonStar, Sun, SunDim } from 'lucide-react'
 
 const routes = [
+  { name: 'Notes', route: '/notes' },
   { name: 'Buckets', route: '/buckets' },
   { name: 'Integrations', route: '/integrations' },
 ] as const
