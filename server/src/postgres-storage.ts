@@ -269,7 +269,7 @@ export class PostgresStorage {
       SELECT l.*
       FROM links l
       WHERE l.user_id = $1 AND mirror_bucket_id = $2
-      ORDER BY l.priority ASC;
+      ORDER BY l.priority DESC;
     `, [userId, mirrorBucketId])
 
     return rows.map(row => this.deserializeLink(row))

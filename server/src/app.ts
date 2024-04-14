@@ -10,6 +10,8 @@ import { startTelegramBot } from './telegram/start-telegram-bot.js'
 import { startApiServer } from './api/start-api-server.js'
 import { getAppVersion } from './utils/get-app-version.js'
 
+pg.types.setTypeParser(pg.types.builtins.NUMERIC, value => parseFloat(value))
+
 async function start() {
   if (env.USE_TEST_MODE) {
     logger.warn({}, 'Test mode is enabled')
