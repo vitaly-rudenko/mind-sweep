@@ -30,12 +30,12 @@ export async function startTelegramBot() {
   })
 
   bot.telegram.setMyCommands([
-    { command: 'start', description: 'Get help' },
-    { command: 'app', description: 'Access the app' },
+    { command: 'start', description: 'Get started' },
+    { command: 'app', description: 'Open the app' },
   ])
 
   bot.use((context, next) => {
-    if (!env.USE_TEST_MODE && context.from?.is_bot) return
+    if (!env.USE_TEST_MODE && context.from?.is_bot || context.from?.id === botInfo.id) return
     return next()
   })
 
@@ -61,7 +61,9 @@ export async function startTelegramBot() {
   })
 
   bot.command('app', async (context) => {
-    await context.reply(generateWebAppUrl())
+    const message = await context.reply(generateWebAppUrl(), { link_preview_options: { is_disabled: true } })
+    await context.pinChatMessage(message.message_id, { disable_notification: true })
+    await context.deleteMessage()
   })
 
   bot.command('debug', async (context) => {
