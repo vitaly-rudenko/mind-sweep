@@ -11,6 +11,7 @@ import { createTelegramVendorEntity } from './create-telegram-vendor-entity.js'
 import { parseTelegramMessage } from './parse-telegram-message.js'
 import { getLocaleFromTelegramLanguageCode } from './get-locale-from-telegram-language-code.js'
 import { generateWebAppUrl } from '../web-app/generate-web-app-url.js'
+import { reactToAcknowledgeMessage } from './react-to-acknowledge-message.js'
 
 export async function startTelegramBot() {
   const { storage, version } = registry.export()
@@ -148,6 +149,8 @@ export async function startTelegramBot() {
     if (context.message.reply_to_message) {
       await bot.telegram.deleteMessage(context.message.reply_to_message.chat.id, context.message.reply_to_message.message_id)
     }
+
+    await reactToAcknowledgeMessage(context.message)
   })
 
   bot.catch(async (err, context) => {
