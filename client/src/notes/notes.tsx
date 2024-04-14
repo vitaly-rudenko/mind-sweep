@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/card'
-import { Separator } from '@/components/separator'
 import { cn } from '@/utils/cn'
-import { useState, type FC, type ReactNode } from 'react'
+import { useState, type FC } from 'react'
 import { useNotesQuery } from './api'
 import { BucketCombobox } from '@/buckets/bucket-combobox'
 import type { Bucket, Note } from '@/types'
