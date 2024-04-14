@@ -20,19 +20,18 @@ export async function handleNote(
   if (!mirrorBucket) throw new Error('Bucket not found')
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
-  for (const link of links) {
-    if (link.template && match(note.content, link.template) === undefined) continue
+  const matchingLink = links.find(link => !link.template || match(note.content, link.template) !== undefined)
+  if (!matchingLink) return
 
-    if (link.defaultTags) {
-      note.tags.push(...link.defaultTags)
-    }
-
-    await storeNote({
-      note,
-      userId,
-      mirrorVendorEntityQuery,
-      sourceBucketId: link.sourceBucketId,
-    })
+  if (matchingLink.defaultTags) {
+    note.tags.push(...matchingLink.defaultTags)
   }
+
+  await storeNote({
+    note,
+    userId,
+    mirrorVendorEntityQuery,
+    sourceBucketId: matchingLink.sourceBucketId,
+  })
 }
 
