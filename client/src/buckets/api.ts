@@ -64,7 +64,6 @@ export const useDeleteBucketMutation = () => {
 type CreateLinkInput = {
   sourceBucketId: number
   mirrorBucketId: number
-  priority: number
   template?: string
   defaultTags?: string[]
 }
@@ -86,6 +85,40 @@ export const useCreateLinkMutation = () => {
   })
 }
 
+export const useSwapLinksMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (input: { link1: Link, link2: Link }) => {
+      const { link1, link2 } = input
+
+      await callApi(`/links/${link1.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authorizationHeaders(authToken),
+        },
+        body: JSON.stringify({
+          ...link1,
+          priority: link2.priority,
+        }),
+      })
+
+      await callApi(`/links/${link2.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authorizationHeaders(authToken),
+        },
+        body: JSON.stringify({
+          ...link2,
+          priority: link1.priority,
+        }),
+      })
+    }
+  })
+}
+
 export const useDeleteLinkMutation = () => {
   const { authToken } = useRequiredAuth()
 
@@ -98,7 +131,6 @@ export const useDeleteLinkMutation = () => {
     }
   })
 }
-
 
 export const useSyncLinkMutation = () => {
   const { authToken } = useRequiredAuth()

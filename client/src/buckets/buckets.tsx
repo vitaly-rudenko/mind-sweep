@@ -2,13 +2,13 @@ import { Button } from '@/components/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter, CardContent } from '@/components/card'
 import { useCallback, useEffect, useState, type FC } from 'react'
 import { BucketEditor } from './bucket-editor'
-import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation, useSyncLinkMutation } from './api'
+import { useDeleteBucketMutation, useBucketsQuery, useDeleteLinkMutation, useSyncLinkMutation, useSwapLinksMutation } from './api'
 import type { Bucket, Bucket as BucketComponent, Link } from '@/types'
 import { createToast, dismissToast } from '@/utils/toast'
 import { Alert } from '@/components/alert-dialog'
 import { cn } from '@/utils/cn'
 import { Separator } from '@/components/separator'
-import { CornerDownRight } from 'lucide-react'
+import { ArrowDown, ArrowUp, CornerDownRight } from 'lucide-react'
 import { LinkEditor } from './link-editor'
 import { bucketTypeName } from './bucket-type-name'
 
@@ -16,6 +16,7 @@ export const Buckets: FC = () => {
   const { data, refetch } = useBucketsQuery()
 
   const syncLinkMutation = useSyncLinkMutation()
+  const swapLinksMutation = useSwapLinksMutation()
 
   const [deleteId, setDeleteId] = useState<number>()
   const deleteMutation = useDeleteBucketMutation()
@@ -63,6 +64,12 @@ export const Buckets: FC = () => {
   }, [deleteMutation.isSuccess, refetch])
 
   useEffect(() => {
+    if (swapLinksMutation.isSuccess) {
+      refetch()
+    }
+  }, [swapLinksMutation.isSuccess, refetch])
+
+  useEffect(() => {
     if (deleteLinkMutation.isSuccess) {
       createToast('Buckets have been unlinked', { type: 'success' })
       setDeleteLinkId(undefined)
@@ -106,6 +113,7 @@ export const Buckets: FC = () => {
             onLink={() => setSelectedBucket(bucket)}
             onDelete={() => setDeleteId(bucket.id)}
             onSyncLink={handleSyncLink}
+            onSwapLinks={(link1, link2) => swapLinksMutation.mutateAsync({ link1, link2 })}
             onDeleteLink={(link) => setDeleteLinkId(link.id)}
           />
         ))}
@@ -121,8 +129,9 @@ const BucketComponent: FC<{
   onLink: () => void
   onDelete: () => void
   onSyncLink: (link: Link) => void
+  onSwapLinks: (link1: Link, link2: Link) => void
   onDeleteLink: (link: Link) => void
-}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onDeleteLink, onSyncLink }) => {
+}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onSyncLink, onSwapLinks, onDeleteLink }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <div className='flex flex-col gap-0'>
@@ -141,16 +150,21 @@ const BucketComponent: FC<{
       </div>
     </Card>
     <div className='flex flex-col gap-0'>
-      {sourceLinks.map((link, i) => (
-        <LinkComponent key={link.id}
+      {sourceLinks.map((link, i) => {
+        const prevLink = i > 0 ? sourceLinks.at(i - 1) : undefined
+        const nextLink = i < sourceLinks.length - 1 ? sourceLinks.at(i + 1) : undefined
+
+        return <LinkComponent key={link.id}
           buckets={buckets}
           link={link}
           first={i === 0}
           last={i === sourceLinks.length - 1}
-          onDelete={() => onDeleteLink(link)}
           onSync={() => onSyncLink(link)}
+          onMoveUp={prevLink ? () => onSwapLinks(link, prevLink) : undefined}
+          onMoveDown={nextLink ? () => onSwapLinks(link, nextLink) : undefined}
+          onDelete={() => onDeleteLink(link)}
         />
-      ))}
+      })}
       <div className='flex items-center gap-2 pt-2 pl-2'>
         <CornerDownRight className='inline size-6 shrink-0 text-primary' />
         <Button variant='link' role='combobox' className='p-0 justify-between h-auto' onClick={onLink}>
@@ -167,8 +181,10 @@ const LinkComponent: FC<{
   first: boolean
   last: boolean
   onSync: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
   onDelete: () => void
-}> = ({ buckets, link, first, last, onSync, onDelete }) => {
+}> = ({ buckets, link, first, last, onSync, onMoveUp, onMoveDown, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
@@ -197,6 +213,8 @@ const LinkComponent: FC<{
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
         <Separator />
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
+          <Button onClick={onMoveUp} disabled={!onMoveUp} variant='link' size='icon' className='min-w-10'><ArrowUp /></Button>
+          <Button onClick={onMoveDown} disabled={!onMoveDown} variant='link' size='icon' className='min-w-10'><ArrowDown /></Button>
           <Button onClick={onSync} variant='link' className='grow basis-1'>Sync</Button>
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>

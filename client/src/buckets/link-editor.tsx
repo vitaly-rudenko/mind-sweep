@@ -23,7 +23,6 @@ import { bucketTypeName } from './bucket-type-name'
 type FormState = {
   sourceBucket: Bucket | ''
   mirrorBucket: Bucket | ''
-  priority: number
   template: string
   defaultTags: string
 }
@@ -31,7 +30,6 @@ type FormState = {
 const defaultValues: FormState = {
   sourceBucket: '',
   mirrorBucket: '',
-  priority: 0,
   template: '',
   defaultTags: '',
 }
@@ -58,7 +56,6 @@ export const LinkEditor: FC<{
       await createMutation.mutateAsync({
         sourceBucketId: formState.sourceBucket.id,
         mirrorBucketId: formState.mirrorBucket.id,
-        priority: formState.priority,
         template: formState.template || undefined,
         defaultTags: defaultTags.length > 0 ? defaultTags : undefined,
       })
