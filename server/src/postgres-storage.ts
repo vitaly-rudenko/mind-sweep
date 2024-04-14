@@ -228,7 +228,11 @@ export class PostgresStorage {
       SELECT b.id, b.user_id, b.name, b.query_id, b.bucket_type, b.metadata, b.integration_id
         , COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
       FROM buckets b
-      LEFT JOIN links l ON l.mirror_bucket_id = b.id
+      LEFT JOIN (
+        SELECT *
+        FROM links
+        ORDER BY priority ASC
+      ) l ON l.mirror_bucket_id = b.id
       WHERE b.user_id = $1
       GROUP BY b.id;
     `, [userId])
@@ -251,7 +255,8 @@ export class PostgresStorage {
     const { rows } = await this.client.query<LinkRow>(`
       SELECT l.*
       FROM links l
-      WHERE l.user_id = $1 AND mirror_bucket_id = $2;
+      WHERE l.user_id = $1 AND mirror_bucket_id = $2
+      ORDER BY l.priority ASC;
     `, [userId, mirrorBucketId])
 
     return rows.map(row => this.deserializeLink(row))
