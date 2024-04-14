@@ -26,6 +26,7 @@ export const Buckets: FC = () => {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [selectedBucket, setSelectedBucket] = useState<Bucket>()
+  const [selectedLink, setSelectedLink] = useState<Link>()
 
   const handleSyncLink = useCallback(async (link: Link) => {
     const toastId = createToast('Initiating sync...', { type: 'loading' })
@@ -50,10 +51,10 @@ export const Buckets: FC = () => {
   }, [editorOpen, refetch])
 
   useEffect(() => {
-    if (!selectedBucket) {
+    if (!selectedBucket && !selectedLink) {
       refetch()
     }
-  }, [selectedBucket, refetch])
+  }, [selectedBucket, refetch, selectedLink])
 
   useEffect(() => {
     if (deleteMutation.isSuccess) {
@@ -77,9 +78,20 @@ export const Buckets: FC = () => {
     }
   }, [deleteLinkMutation.isSuccess, refetch])
 
+  if (!data?.items) return null
+
   return <>
     <BucketEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
-    <LinkEditor mirrorBucket={selectedBucket} open={!!selectedBucket} onClose={() => setSelectedBucket(undefined)} />
+    <LinkEditor
+      buckets={data.items.map(({ bucket }) => bucket)}
+      link={selectedLink}
+      mirrorBucket={selectedBucket}
+      open={Boolean(selectedBucket || selectedLink)}
+      onClose={() => {
+        setSelectedBucket(undefined)
+        setSelectedLink(undefined)
+      }}
+    />
 
     <Alert
       title='Delete Bucket?'
@@ -113,6 +125,7 @@ export const Buckets: FC = () => {
             onLink={() => setSelectedBucket(bucket)}
             onDelete={() => setDeleteId(bucket.id)}
             onSyncLink={handleSyncLink}
+            onEditLink={(link) => setSelectedLink(link)}
             onSwapLinks={(link1, link2) => swapLinksMutation.mutateAsync({ link1, link2 })}
             onDeleteLink={(link) => setDeleteLinkId(link.id)}
           />
@@ -128,10 +141,11 @@ const BucketComponent: FC<{
   bucket: Bucket
   onLink: () => void
   onDelete: () => void
+  onEditLink: (link: Link) => void
   onSyncLink: (link: Link) => void
   onSwapLinks: (link1: Link, link2: Link) => void
   onDeleteLink: (link: Link) => void
-}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onSyncLink, onSwapLinks, onDeleteLink }) => {
+}> = ({ buckets, bucket, sourceLinks, onLink, onDelete, onEditLink, onSyncLink, onSwapLinks, onDeleteLink }) => {
   const [expanded, setExpanded] = useState(false)
 
   return <div className='flex flex-col gap-0'>
@@ -159,6 +173,7 @@ const BucketComponent: FC<{
           link={link}
           first={i === 0}
           last={i === sourceLinks.length - 1}
+          onEdit={() => onEditLink(link)}
           onSync={() => onSyncLink(link)}
           onMoveUp={prevLink ? () => onSwapLinks(link, prevLink) : undefined}
           onMoveDown={nextLink ? () => onSwapLinks(link, nextLink) : undefined}
@@ -180,11 +195,12 @@ const LinkComponent: FC<{
   link: Link
   first: boolean
   last: boolean
+  onEdit: () => void
   onSync: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
   onDelete: () => void
-}> = ({ buckets, link, first, last, onSync, onMoveUp, onMoveDown, onDelete }) => {
+}> = ({ buckets, link, first, last, onEdit, onSync, onMoveUp, onMoveDown, onDelete }) => {
   const [expanded, setExpanded] = useState(false)
 
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
@@ -215,6 +231,7 @@ const LinkComponent: FC<{
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
           <Button onClick={onMoveUp} disabled={!onMoveUp} variant='link' size='icon' className='min-w-10'><ArrowUp /></Button>
           <Button onClick={onMoveDown} disabled={!onMoveDown} variant='link' size='icon' className='min-w-10'><ArrowDown /></Button>
+          <Button onClick={onEdit} variant='link' className='grow basis-1'>Edit</Button>
           <Button onClick={onSync} variant='link' className='grow basis-1'>Sync</Button>
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>

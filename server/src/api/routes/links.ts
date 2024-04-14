@@ -11,6 +11,7 @@ const createLinkSchema = z.object({
 })
 
 const updateLinkSchema = z.object({
+  sourceBucketId: z.number(),
   priority: z.number().min(0).max(999),
   template: z.string().min(1).optional(),
   defaultTags: z.array(z.string().min(1)).min(1).optional(),
@@ -41,6 +42,7 @@ export function createLinksRouter() {
     const input = updateLinkSchema.parse(req.body)
 
     await storage.updateLink(req.user.id, Number(req.params.id), {
+      sourceBucketId: input.sourceBucketId,
       priority: input.priority,
       template: input.template,
       defaultTags: input.defaultTags,

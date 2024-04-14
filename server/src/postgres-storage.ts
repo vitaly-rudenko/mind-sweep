@@ -77,14 +77,27 @@ export class PostgresStorage {
     }
   }
 
-  async updateLink(userId: number, linkId: number, link: Omit<Link, 'id' | 'sourceBucketId' | 'mirrorBucketId' | 'userId'>): Promise<void> {
-    await this.client.query(`
-      UPDATE links
-      SET priority = $3
-        , template = $4
-        , default_tags = $5
-      WHERE user_id = $1 AND id = $2;
-    `, [userId, linkId, link.priority, link.template, link.defaultTags])
+  async updateLink(userId: number, linkId: number, link: Omit<Link, 'id' | 'mirrorBucketId' | 'userId'>): Promise<void> {
+    try {
+      await this.client.query(`
+        UPDATE links
+        SET source_bucket_id = $3
+          , priority = $4
+          , template = $5
+          , default_tags = $6
+        WHERE user_id = $1 AND id = $2;
+      `, [userId, linkId, link.sourceBucketId, link.priority, link.template, link.defaultTags])
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err) {
+        if (err.code === '23505') {
+          throw new AlreadyExistsError()
+        } else if (err.code === '23514') {
+          throw new ApiError({ code: 'INVALID_LINK', status: 400 })
+        }
+      }
+
+      throw err
+    }
   }
 
   async createUserWithIntegration(

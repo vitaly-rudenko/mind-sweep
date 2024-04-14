@@ -85,6 +85,33 @@ export const useCreateLinkMutation = () => {
   })
 }
 
+type UpdateLinkInput = {
+  id: number
+  priority: number
+  sourceBucketId: number
+  template?: string
+  defaultTags?: string[]
+}
+
+export const useUpdateLinkMutation = () => {
+  const { authToken } = useRequiredAuth()
+
+  return useMutation({
+    mutationFn: async (input: UpdateLinkInput) => {
+      const { id, ...payload } = input
+
+      await callApi(`/links/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authorizationHeaders(authToken),
+        },
+        body: JSON.stringify(payload),
+      })
+    }
+  })
+}
+
 export const useSwapLinksMutation = () => {
   const { authToken } = useRequiredAuth()
 

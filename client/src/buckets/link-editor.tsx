@@ -12,9 +12,9 @@ import { type FC, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Form, FormField, FormItem } from '@/components/form'
 import { createToast, dismissToast } from '@/utils/toast'
-import { useCreateLinkMutation } from './api'
+import { useCreateLinkMutation, useUpdateLinkMutation } from './api'
 import { ApiError } from '@/utils/api'
-import type { Bucket } from '@/types'
+import type { Bucket, Link } from '@/types'
 import { BucketCombobox } from './bucket-combobox'
 import { ArrowDown } from 'lucide-react'
 import { Input } from '@/components/input'
@@ -35,12 +35,15 @@ const defaultValues: FormState = {
 }
 
 export const LinkEditor: FC<{
+  buckets: Bucket[]
+  link?: Link
   sourceBucket?: Bucket
   mirrorBucket?: Bucket
   open: boolean
   onClose: () => void
-}> = ({ sourceBucket, mirrorBucket, open, onClose }) => {
+}> = ({ buckets, link, sourceBucket, mirrorBucket, open, onClose }) => {
   const createMutation = useCreateLinkMutation()
+  const updateMutation = useUpdateLinkMutation()
 
   const form = useForm<FormState>({ defaultValues })
   const [$sourceBucket, $mirrorBucket] = form.watch(['sourceBucket', 'mirrorBucket'])
@@ -48,17 +51,29 @@ export const LinkEditor: FC<{
   const onSubmit = useCallback(async (formState: FormState) => {
     if (formState.sourceBucket === '' || formState.mirrorBucket === '') return
 
-    const toastId = createToast('Adding Link...', { type: 'loading' })
+    const toastId = createToast(link ? 'Updating Link...' : 'Adding Link...', { type: 'loading' })
 
     try {
       const defaultTags = formState.defaultTags.split(',').map((tag) => tag.trim()).filter(Boolean)
 
-      await createMutation.mutateAsync({
+      const input = {
         sourceBucketId: formState.sourceBucket.id,
-        mirrorBucketId: formState.mirrorBucket.id,
         template: formState.template || undefined,
         defaultTags: defaultTags.length > 0 ? defaultTags : undefined,
-      })
+      }
+
+      if (link) {
+        await updateMutation.mutateAsync({
+          id: link.id,
+          priority: link.priority,
+          ...input,
+        })
+      } else {
+        await createMutation.mutateAsync({
+          mirrorBucketId: formState.mirrorBucket.id,
+          ...input,
+        })
+      }
 
       createToast('Link has been saved', { type: 'success', toastId })
       onClose()
@@ -72,7 +87,7 @@ export const LinkEditor: FC<{
       console.error(error)
       dismissToast(toastId)
     }
-  }, [createMutation, onClose])
+  }, [createMutation, link, onClose, updateMutation])
 
   const switchBuckets = useCallback(() => {
     form.setValue('sourceBucket', $mirrorBucket)
@@ -85,9 +100,15 @@ export const LinkEditor: FC<{
         ...defaultValues,
         sourceBucket: sourceBucket ?? '',
         mirrorBucket: mirrorBucket ?? '',
+        ...link ? {
+          defaultTags: link.defaultTags?.join(', ') ?? '',
+          template: link.template ?? '',
+          mirrorBucket: buckets.find((bucket) => bucket.id === link.mirrorBucketId) ?? '',
+          sourceBucket: buckets.find((bucket) => bucket.id === link.sourceBucketId) ?? '',
+        } : {}
       })
     }
-  }, [form, open, mirrorBucket, sourceBucket])
+  }, [form, open, mirrorBucket, sourceBucket, link, buckets])
 
   return (
     <Drawer open={open} onOpenChange={(open) => !open && onClose()} dismissible={false}>
