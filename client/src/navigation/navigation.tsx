@@ -9,8 +9,8 @@ import { cn } from '@/utils/cn'
 import { Moon, MoonStar, Sun, SunDim } from 'lucide-react'
 
 const routes = [
-  { name: 'Integrations', route: '/integrations' },
   { name: 'Buckets', route: '/buckets' },
+  { name: 'Integrations', route: '/integrations' },
 ] as const
 
 function getTimeOfTheDay() {
