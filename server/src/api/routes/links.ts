@@ -1,7 +1,6 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
 import { registry } from '../../registry.js'
-import { syncNotes } from '../../notes/sync-notes.js'
 
 const createLinkSchema = z.object({
   sourceBucketId: z.number(),
@@ -54,11 +53,6 @@ export function createLinksRouter() {
   router.delete('/links/:id', async (req, res) => {
     await storage.deleteLinkById(req.user.id, Number(req.params.id))
     res.sendStatus(204)
-  })
-
-  router.post('/links/:id/sync', async (req, res) => {
-    await syncNotes({ linkId: Number(req.params.id), userId: req.user.id })
-    res.sendStatus(200)
   })
 
   return router
