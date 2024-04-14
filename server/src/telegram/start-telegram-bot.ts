@@ -1,6 +1,6 @@
 import { stripIndent } from 'common-tags'
 import { Telegraf } from 'telegraf'
-import { message } from 'telegraf/filters'
+import { editedMessage, message } from 'telegraf/filters'
 import { handleNote } from '../notes/handle-note.js'
 import { logger } from '../logging/logger.js'
 import { env } from '../env.js'
@@ -122,13 +122,14 @@ export async function startTelegramBot() {
   })
 
   bot.on(message('text'), async (context) => {
-    const { content, tags } = parseTelegramMessage(context.message)
+    const message = context.message
+    const { content, tags } = parseTelegramMessage(message)
 
     const userId = context.state.user.id
     const note: Note = {
       content,
       tags,
-      mirrorVendorEntity: createTelegramVendorEntity(context.message),
+      mirrorVendorEntity: createTelegramVendorEntity(message),
     }
 
     await handleNote({
@@ -138,19 +139,46 @@ export async function startTelegramBot() {
         queryId: String(context.chat.id),
         bucketType: 'telegram_chat',
       },
-      ...context.message.reply_to_message ? {
+      ...message.reply_to_message ? {
         mirrorVendorEntityQuery: {
-          id: `${context.message.reply_to_message.chat.id}_${context.message.reply_to_message.message_id}`,
+          id: `${message.reply_to_message.chat.id}_${message.reply_to_message.message_id}`,
           vendorEntityType: 'telegram_message',
         }
       } : {},
     })
 
-    if (context.message.reply_to_message) {
-      await bot.telegram.deleteMessage(context.message.reply_to_message.chat.id, context.message.reply_to_message.message_id)
+    if (message.reply_to_message) {
+      await bot.telegram.deleteMessage(message.reply_to_message.chat.id, message.reply_to_message.message_id)
     }
 
-    await reactToAcknowledgeMessage(context.message)
+    await reactToAcknowledgeMessage(message)
+  })
+
+  bot.on(editedMessage('text'), async (context) => {
+    const message = context.editedMessage
+    const { content, tags } = parseTelegramMessage(message)
+
+    const userId = context.state.user.id
+    const note: Note = {
+      content,
+      tags,
+      mirrorVendorEntity: createTelegramVendorEntity(message),
+    }
+
+    await handleNote({
+      note,
+      userId,
+      mirrorBucketQuery: {
+        queryId: String(context.chat.id),
+        bucketType: 'telegram_chat',
+      },
+      mirrorVendorEntityQuery: {
+        id: `${message.chat.id}_${message.message_id}`,
+        vendorEntityType: 'telegram_message',
+      }
+    })
+
+    await reactToAcknowledgeMessage(message)
   })
 
   bot.catch(async (err, context) => {
