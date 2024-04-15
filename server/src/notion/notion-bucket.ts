@@ -31,6 +31,26 @@ export class NotionBucket {
     return pages.results.map(page => this.deserializeNote(bucket.metadata.databaseId, page))
   }
 
+  async deleteNote(input: {
+    bucket: Extract<Bucket, { bucketType: 'notion_database' }>
+    mirrorVendorEntityQuery: VendorEntityQuery
+  }): Promise<void> {
+    const { bucket, mirrorVendorEntityQuery } = input
+
+    const integration = await this.storage.getIntegrationById(bucket.userId, bucket.integrationId)
+    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
+    if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
+
+    const page = await this.getPageByMirrorVendorEntityQueryId({ integration, bucket, mirrorVendorEntityQuery })
+    if (!page) return
+
+    await this.client.pages.update({
+      auth: integration.metadata.integrationSecret,
+      page_id: page.id,
+      archived: true,
+    })
+  }
+
   async storeNote(input: {
     note: Note
     bucketId: number
