@@ -28,13 +28,14 @@ export async function handleMirrorNoteUpdated(
 
   for (const sourcedNote of sourcedNotes) {
     const links = await storage.getLinksByBucketIds(userId, sourcedNote.sourceBucket.id, mirrorBucket.id)
-    const link = links.find(link => !link.template || match(link.template, note.content))
+    const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
 
     if (sourcedNote.sourceBucket.bucketType === 'notion_database') {
       await notionBucket.updateNote({
         userId,
         bucketId: sourcedNote.sourceBucket.id,
         note: {
+          ...sourcedNote.note,
           ...note,
           tags: [...note.tags, ...link?.defaultTags ?? []],
         },

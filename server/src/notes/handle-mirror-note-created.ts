@@ -17,7 +17,7 @@ export async function handleMirrorNoteCreated(
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
-  const link = links.find(link => !link.template || match(link.template, note.content))
+  const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
   if (!link) return
 
   const sourceBucket = await storage.getBucketById(userId, link.sourceBucketId)

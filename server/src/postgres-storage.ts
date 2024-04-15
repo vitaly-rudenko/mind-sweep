@@ -226,7 +226,7 @@ export class PostgresStorage {
       LEFT JOIN (
         SELECT *
         FROM links
-        ORDER BY priority ASC
+        ORDER BY priority DESC
       ) l ON l.mirror_bucket_id = b.id
       WHERE b.user_id = $1
       GROUP BY b.id;
