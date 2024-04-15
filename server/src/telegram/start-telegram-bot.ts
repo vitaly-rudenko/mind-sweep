@@ -1,7 +1,6 @@
 import { stripIndent } from 'common-tags'
 import { Telegraf, TelegramError } from 'telegraf'
 import { editedMessage, message } from 'telegraf/filters'
-import { handleNewOrEditedNote } from '../notes/handle-new-or-edited-note.js'
 import { logger } from '../logging/logger.js'
 import { env } from '../env.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
@@ -12,7 +11,9 @@ import { parseTelegramMessage } from './parse-telegram-message.js'
 import { getLocaleFromTelegramLanguageCode } from './get-locale-from-telegram-language-code.js'
 import { generateWebAppUrl } from '../web-app/generate-web-app-url.js'
 import { reactToAcknowledgeMessage } from './react-to-acknowledge-message.js'
-import { deleteNote } from '../notes/delete-note.js'
+import { handleMirrorNoteDeleted } from '../notes/handle-mirror-note-deleted.js'
+import { handleMirrorNoteCreated } from '../notes/handle-mirror-note-created.js'
+import { handleMirrorNoteUpdated } from '../notes/handle-mirror-note-updated.js'
 
 export async function startTelegramBot() {
   const { storage, version } = registry.export()
@@ -121,23 +122,34 @@ export async function startTelegramBot() {
       mirrorVendorEntity: createTelegramVendorEntity(message),
     }
 
-    await handleNewOrEditedNote({
-      note,
-      userId,
-      mirrorBucketQuery: {
-        queryId: String(context.chat.id),
-        bucketType: 'telegram_chat',
-      },
-      ...message.reply_to_message ? {
+    if (message.reply_to_message) {
+      await handleMirrorNoteUpdated({
+        note,
+        userId,
+        mirrorBucketQuery: {
+          queryId: String(context.chat.id),
+          bucketType: 'telegram_chat',
+        },
         mirrorVendorEntityQuery: {
           id: `${message.reply_to_message.chat.id}_${message.reply_to_message.message_id}`,
           vendorEntityType: 'telegram_message',
         }
-      } : {},
-    })
+      })
 
-    if (message.reply_to_message) {
-      await bot.telegram.deleteMessage(message.reply_to_message.chat.id, message.reply_to_message.message_id)
+      try {
+        await bot.telegram.deleteMessage(message.reply_to_message.chat.id, message.reply_to_message.message_id)
+      } catch (err) {
+        logger.error({ err }, 'Could not delete message')
+      }
+    } else {
+      await handleMirrorNoteCreated({
+        note,
+        userId,
+        mirrorBucketQuery: {
+          queryId: String(context.chat.id),
+          bucketType: 'telegram_chat',
+        },
+      })
     }
 
     await reactToAcknowledgeMessage(message.chat.id, message.message_id)
@@ -154,7 +166,7 @@ export async function startTelegramBot() {
       mirrorVendorEntity: createTelegramVendorEntity(message),
     }
 
-    await handleNewOrEditedNote({
+    await handleMirrorNoteUpdated({
       note,
       userId,
       mirrorBucketQuery: {
@@ -174,7 +186,7 @@ export async function startTelegramBot() {
     const newReaction = context.messageReaction.new_reaction.at(0)
 
     if (newReaction?.type === 'emoji' && newReaction.emoji === '💩') {
-      await deleteNote({
+      await handleMirrorNoteDeleted({
         userId: context.state.user.id,
         mirrorBucketQuery: {
           queryId: String(context.chat.id),

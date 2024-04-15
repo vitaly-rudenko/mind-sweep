@@ -1,16 +1,15 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import type { Note } from './types.js'
 
-export async function deleteNote(
+export async function handleMirrorNoteDeleted(
   input: {
     userId: number
     mirrorBucketQuery: BucketQuery
     mirrorVendorEntityQuery: VendorEntityQuery
   },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-): Promise<Note | undefined> {
+): Promise<void> {
   const { userId, mirrorBucketQuery, mirrorVendorEntityQuery } = input
 
   const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
@@ -27,6 +26,4 @@ export async function deleteNote(
       throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
     }
   }
-
-  return undefined
 }

@@ -282,6 +282,17 @@ export class PostgresStorage {
     return rows.map(row => this.deserializeLink(row))
   }
 
+  async getLinksByBucketIds(userId: number, sourceBucketId: number, mirrorBucketId: number): Promise<Link[]> {
+    const { rows } = await this.client.query<LinkRow>(`
+      SELECT l.*
+      FROM links l
+      WHERE l.user_id = $1 AND source_bucket_id = $2 AND mirror_bucket_id = $3
+      ORDER BY l.priority DESC;
+    `, [userId, sourceBucketId, mirrorBucketId])
+
+    return rows.map(row => this.deserializeLink(row))
+  }
+
   async getBucketById(userId: number, bucketId: number): Promise<Bucket | undefined> {
     const { rows } = await this.client.query<BucketRow>(`
       SELECT b.*
