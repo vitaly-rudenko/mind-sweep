@@ -35,9 +35,10 @@ export async function handleMirrorNoteUpdated(
         userId,
         bucketId: sourcedNote.sourceBucket.id,
         note: {
-          ...sourcedNote.note,
-          ...note,
+          content: note.content,
           tags: [...note.tags, ...link?.defaultTags ?? []],
+          mirrorVendorEntity: note.mirrorVendorEntity,
+          sourceVendorEntity: sourcedNote.note.sourceVendorEntity,
         },
       })
     } else {

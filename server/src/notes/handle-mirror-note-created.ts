@@ -28,8 +28,9 @@ export async function handleMirrorNoteCreated(
       userId,
       bucketId: sourceBucket.id,
       note: {
-        ...note,
+        content: note.content,
         tags: [...note.tags, ...link?.defaultTags ?? []],
+        mirrorVendorEntity: note.mirrorVendorEntity,
       },
     })
   } else {
