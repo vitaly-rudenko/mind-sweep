@@ -87,20 +87,6 @@ export async function startTelegramBot() {
         metadata: {
           userId: context.from.id,
         }
-      }, {
-        name: formatTelegramUserName(context.from),
-        integrationType: 'telegram',
-        queryId: String(context.from.id),
-        metadata: {
-          userId: context.from.id,
-        }
-      }, {
-        name: context.chat.type === 'private' ? formatTelegramUserName(botInfo) : context.chat.title,
-        bucketType: 'telegram_chat',
-        queryId: String(context.chat.id),
-        metadata: {
-          chatId: context.chat.id,
-        }
       })
 
       await context.reply('Welcome to the MindSweep! 🎉')

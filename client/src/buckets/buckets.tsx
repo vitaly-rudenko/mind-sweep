@@ -227,20 +227,22 @@ const LinkComponent: FC<{
       last && 'rounded-b',
       first && 'border-t-0'
     )}>
-      <CardHeader className={cn('cursor-pointer', hasContent && 'pb-0')} onClick={() => onExpand(!expanded)}>
-        <CardTitle className='flex justify-between items-baseline gap-2'>
-          <div className='truncate leading-normal'>
-            <div className='text-primary inline-block min-w-4 pr-1'>{index + 1}</div>{sourceBucket.name}
-          </div>
-          <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
-        </CardTitle>
-      </CardHeader>
-      {!!hasContent && (
-        <CardContent className='cursor-pointer' onClick={() => onExpand(!expanded)}>
-          {!!link.template && <div className='text-sm text-primary font-mono'>{link.template}</div>}
-          {!!link.defaultTags && <div className='text-sm text-primary'>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</div>}
-        </CardContent>
-      )}
+      <div className='cursor-pointer' onClick={() => onExpand(!expanded)}>
+        <CardHeader>
+          <CardTitle className='flex justify-between items-baseline gap-2'>
+            <div className='truncate leading-normal'>
+              <div className='text-primary inline-block min-w-4 pr-1'>{index + 1}</div>{sourceBucket.name}
+            </div>
+            <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
+          </CardTitle>
+        </CardHeader>
+        {!!hasContent && (
+          <CardContent>
+            {!!link.template && <div className='text-sm text-primary font-mono'>{link.template}</div>}
+            {!!link.defaultTags && <div className='text-sm text-primary'>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</div>}
+          </CardContent>
+        )}
+      </div>
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
         <Separator />
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>

@@ -100,12 +100,7 @@ export class PostgresStorage {
     }
   }
 
-  async createUserWithIntegration(
-    user: Omit<User, 'id'>,
-    loginMethod: Omit<LoginMethod, 'id' | 'userId'>,
-    integration: Omit<Integration, 'id' | 'userId' | 'isLoginMethod'>,
-    bucket: Omit<Bucket, 'id' | 'userId' | 'integrationId'>
-  ): Promise<{ user: User }> {
+  async createUserWithIntegration(user: Omit<User, 'id'>, loginMethod: Omit<LoginMethod, 'id' | 'userId'>): Promise<{ user: User }> {
     try {
       await this.client.query('BEGIN;')
 
@@ -119,18 +114,6 @@ export class PostgresStorage {
         INSERT INTO login_methods (user_id, name, query_id, login_method_type, metadata)
         VALUES ($1, $2, $3, $4, $5);
       `, [userId, loginMethod.name, loginMethod.queryId, loginMethod.loginMethodType, loginMethod.metadata])
-
-      const { rows: [{ id: integrationId }] } = await this.client.query<IntegrationRow>(`
-        INSERT INTO integrations (user_id, name, query_id, integration_type, metadata)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id;
-      `, [userId, integration.name, integration.queryId, integration.integrationType, integration.metadata])
-
-      await this.client.query<BucketRow>(`
-        INSERT INTO buckets (integration_id, user_id, name, query_id, bucket_type, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id;
-      `, [integrationId, userId, bucket.name, bucket.queryId, bucket.bucketType, bucket.metadata])
 
       await this.client.query('COMMIT;')
 
@@ -149,10 +132,10 @@ export class PostgresStorage {
 
   async getUserByLoginMethod<T extends LoginMethodType>(loginMethodType: T, loginMethodQueryId: string): Promise<User | undefined> {
     const { rows } = await this.client.query<UserRow>(`
-      SELECT users.id, users.name, users.locale
-      FROM users
-      INNER JOIN login_methods ON users.id = login_methods.user_id
-      WHERE login_methods.login_method_type = $1 AND login_methods.query_id = $2;
+      SELECT u.*
+      FROM users u
+      INNER JOIN login_methods l ON u.id = l.user_id
+      WHERE l.login_method_type = $1 AND l.query_id = $2;
     `, [loginMethodType, loginMethodQueryId])
 
     return rows[0] ? {
@@ -238,8 +221,7 @@ export class PostgresStorage {
 
   async getBucketsByUserId(userId: number): Promise<{ bucket: Bucket; sourceLinks: Link[] }[]> {
     const { rows } = await this.client.query<BucketRow>(`
-      SELECT b.id, b.user_id, b.name, b.query_id, b.bucket_type, b.metadata, b.integration_id
-        , COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
+      SELECT b.*, COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
       FROM buckets b
       LEFT JOIN (
         SELECT *
