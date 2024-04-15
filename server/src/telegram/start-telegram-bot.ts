@@ -1,5 +1,5 @@
 import { stripIndent } from 'common-tags'
-import { Telegraf } from 'telegraf'
+import { Telegraf, TelegramError } from 'telegraf'
 import { editedMessage, message } from 'telegraf/filters'
 import { handleNewOrEditedNote } from '../notes/handle-new-or-edited-note.js'
 import { logger } from '../logging/logger.js'
@@ -12,6 +12,7 @@ import { parseTelegramMessage } from './parse-telegram-message.js'
 import { getLocaleFromTelegramLanguageCode } from './get-locale-from-telegram-language-code.js'
 import { generateWebAppUrl } from '../web-app/generate-web-app-url.js'
 import { reactToAcknowledgeMessage } from './react-to-acknowledge-message.js'
+import { deleteNote } from '../notes/delete-note.js'
 
 export async function startTelegramBot() {
   const { storage, version } = registry.export()
@@ -167,6 +168,35 @@ export async function startTelegramBot() {
     })
 
     await reactToAcknowledgeMessage(message.chat.id, message.message_id)
+  })
+
+  bot.on('message_reaction', async (context) => {
+    const newReaction = context.messageReaction.new_reaction.at(0)
+
+    if (newReaction?.type === 'emoji' && newReaction.emoji === '💩') {
+      await deleteNote({
+        userId: context.state.user.id,
+        mirrorBucketQuery: {
+          queryId: String(context.chat.id),
+          bucketType: 'telegram_chat',
+        },
+        mirrorVendorEntityQuery: {
+          id: `${context.chat.id}_${context.messageReaction.message_id}`,
+          vendorEntityType: 'telegram_message',
+        }
+      })
+
+      try {
+        await context.deleteMessage()
+      } catch (err) {
+        if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be deleted for everyone') {
+          await reactToAcknowledgeMessage(context.messageReaction.chat.id, context.messageReaction.message_id)
+        } else {
+          logger.error({ err }, 'Could not delete message')
+          throw err
+        }
+      }
+    }
   })
 
   bot.catch(async (err, context) => {
