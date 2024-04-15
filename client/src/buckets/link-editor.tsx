@@ -89,11 +89,6 @@ export const LinkEditor: FC<{
     }
   }, [createMutation, link, onClose, updateMutation])
 
-  const switchBuckets = useCallback(() => {
-    form.setValue('sourceBucket', $mirrorBucket)
-    form.setValue('mirrorBucket', $sourceBucket)
-  }, [$mirrorBucket, $sourceBucket, form])
-
   useEffect(() => {
     if (open) {
       form.reset({
@@ -136,7 +131,7 @@ export const LinkEditor: FC<{
                   )}
                 />
 
-                <div className='flex justify-center cursor-pointer' onClick={() => switchBuckets()}>
+                <div className='flex justify-center'>
                   <ArrowDown className='size-6' />
                 </div>
 

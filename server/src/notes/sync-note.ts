@@ -7,6 +7,7 @@ import { createVendorEntityHash } from '../vendor-entities/create-vendor-entity-
 import { createMirrorVendorEntity } from '../vendor-entities/create-mirror-vendor-entity.js'
 import { updateMirrorVendorEntity } from '../vendor-entities/update-mirror-vendor-entity.js'
 
+// TODO: rewrite this function to use buckets instead of links & use explicit create/updateNote functions
 export async function syncNote(payload: {
   note: Note
   link: Link

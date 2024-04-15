@@ -127,7 +127,7 @@ export function createBucketsRouter() {
     const notes = await readNotes({ userId, bucketId: sourceBucket.id })
 
     for (const note of notes) {
-      const link = links.find(link => !link.template || match(note.content, link.template) !== undefined)
+      const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
       if (link) {
         await syncNote({ note, link, userId })
       }

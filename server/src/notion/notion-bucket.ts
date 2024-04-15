@@ -31,6 +31,77 @@ export class NotionBucket {
     return pages.results.map(page => this.deserializeNote(bucket.metadata.databaseId, page))
   }
 
+  async findNote(input: {
+    bucket: Extract<Bucket, { bucketType: 'notion_database' }>
+    mirrorVendorEntityQuery: VendorEntityQuery
+  }): Promise<Note | undefined> {
+    const { bucket, mirrorVendorEntityQuery } = input
+
+    const integration = await this.storage.getIntegrationById(bucket.userId, bucket.integrationId)
+    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
+    if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
+
+    const page = await this.getPageByMirrorVendorEntityQueryId({ integration, bucket, mirrorVendorEntityQuery })
+    if (!page) return
+
+    return page ? this.deserializeNote(bucket.metadata.databaseId, page) : undefined
+  }
+
+  async deleteNote(input: {
+    bucket: Extract<Bucket, { bucketType: 'notion_database' }>
+    mirrorVendorEntityQuery: VendorEntityQuery
+  }): Promise<void> {
+    const { bucket, mirrorVendorEntityQuery } = input
+
+    const integration = await this.storage.getIntegrationById(bucket.userId, bucket.integrationId)
+    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
+    if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
+
+    const page = await this.getPageByMirrorVendorEntityQueryId({ integration, bucket, mirrorVendorEntityQuery })
+    if (!page) return
+
+    await this.client.pages.update({
+      auth: integration.metadata.integrationSecret,
+      page_id: page.id,
+      archived: true,
+    })
+  }
+
+  async createNote(input: {
+    userId: number
+    bucketId: number
+    note: Note
+  }) {
+    const { note, bucketId, userId } = input
+
+    const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
+
+    await this.client.pages.create({
+      auth: integration.metadata.integrationSecret,
+      parent: { database_id: bucket.metadata.databaseId },
+      properties: this.serializeNote(note),
+    })
+  }
+
+  async updateNote(input: {
+    userId: number
+    bucketId: number
+    note: Note
+  }) {
+    const { note, bucketId, userId } = input
+
+    if (!note.sourceVendorEntity) throw new Error('Note does not have source vendor entity')
+    if (note.sourceVendorEntity.vendorEntityType !== 'notion_page') throw new Error(`Unsupported source vendor entity type: ${note.sourceVendorEntity.vendorEntityType}`)
+
+    const { integration } = await this.getBucketAndIntegration(userId, bucketId)
+
+    await this.client.pages.update({
+      auth: integration.metadata.integrationSecret,
+      page_id: note.sourceVendorEntity.metadata.pageId,
+      properties: this.serializeNote(note),
+    })
+  }
+
   async storeNote(input: {
     note: Note
     bucketId: number
@@ -54,7 +125,7 @@ export class NotionBucket {
     if (!pageId) {
       const mirrorVendorEntityQuery: VendorEntityQuery | undefined = input.mirrorVendorEntityQuery || note.mirrorVendorEntity
       if (mirrorVendorEntityQuery) {
-        const page = await this.getNoteByMirrorVendorEntityQueryId({
+        const page = await this.getPageByMirrorVendorEntityQueryId({
           integration,
           bucket,
           mirrorVendorEntityQuery,
@@ -64,13 +135,13 @@ export class NotionBucket {
     }
 
     if (pageId) {
-      await this.updateNote({ pageId, integration, note })
+      await this._updateNote({ pageId, integration, note })
     } else {
-      await this.createNote({ integration, bucket, note })
+      await this._createNote({ integration, bucket, note })
     }
   }
 
-  private async createNote(input: {
+  private async _createNote(input: {
     integration: Extract<Integration, { integrationType: 'notion' }>
     bucket: Extract<Bucket, { bucketType: 'notion_database' }>
     note: Note
@@ -84,7 +155,19 @@ export class NotionBucket {
     })
   }
 
-  private async updateNote(input: {
+  private async getBucketAndIntegration(userId: number, bucketId: number) {
+    const bucket = await this.storage.getBucketById(userId, bucketId)
+    if (!bucket) throw new Error(`Bucket not found: ${bucketId}`)
+    if (bucket.bucketType !== 'notion_database') throw new Error(`Unsupported bucket type: ${bucket.bucketType}`)
+
+    const integration = await this.storage.getIntegrationById(userId, bucket.integrationId)
+    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
+    if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
+
+    return { bucket, integration }
+  }
+
+  private async _updateNote(input: {
     pageId: string
     integration: Extract<Integration, { integrationType: 'notion' }>
     note: Note
@@ -98,7 +181,7 @@ export class NotionBucket {
     })
   }
 
-  private async getNoteByMirrorVendorEntityQueryId(input: {
+  private async getPageByMirrorVendorEntityQueryId(input: {
     integration: Extract<Integration, { integrationType: 'notion' }>
     bucket: Extract<Bucket, { bucketType: 'notion_database' }>
     mirrorVendorEntityQuery: VendorEntityQuery

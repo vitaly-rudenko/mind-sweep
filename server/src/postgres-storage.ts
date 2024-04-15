@@ -226,7 +226,7 @@ export class PostgresStorage {
       LEFT JOIN (
         SELECT *
         FROM links
-        ORDER BY priority ASC
+        ORDER BY priority DESC
       ) l ON l.mirror_bucket_id = b.id
       WHERE b.user_id = $1
       GROUP BY b.id;
@@ -257,6 +257,20 @@ export class PostgresStorage {
     return rows.map(row => this.deserializeLink(row))
   }
 
+  async getLinkedSourceBuckets(userId: number, mirrorBucketId: number): Promise<Bucket[]> {
+    const { rows } = await this.client.query<BucketRow>(`
+      SELECT b.*
+      FROM buckets b
+      WHERE b.user_id = $1 AND b.id IN (
+        SELECT l.source_bucket_id
+        FROM links l
+        WHERE l.user_id = $1 AND l.mirror_bucket_id = $2
+      );
+    `, [userId, mirrorBucketId])
+
+    return rows.map(row => this.deserializeBucket(row))
+  }
+
   async getLinksBySourceBucketId(userId: number, sourceBucketId: number): Promise<Link[]> {
     const { rows } = await this.client.query<LinkRow>(`
       SELECT l.*
@@ -264,6 +278,17 @@ export class PostgresStorage {
       WHERE l.user_id = $1 AND source_bucket_id = $2
       ORDER BY l.priority DESC;
     `, [userId, sourceBucketId])
+
+    return rows.map(row => this.deserializeLink(row))
+  }
+
+  async getLinksByBucketIds(userId: number, sourceBucketId: number, mirrorBucketId: number): Promise<Link[]> {
+    const { rows } = await this.client.query<LinkRow>(`
+      SELECT l.*
+      FROM links l
+      WHERE l.user_id = $1 AND source_bucket_id = $2 AND mirror_bucket_id = $3
+      ORDER BY l.priority DESC;
+    `, [userId, sourceBucketId, mirrorBucketId])
 
     return rows.map(row => this.deserializeLink(row))
   }

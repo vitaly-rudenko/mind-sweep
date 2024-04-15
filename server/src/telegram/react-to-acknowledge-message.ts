@@ -1,17 +1,17 @@
-import type { Message } from 'telegraf/types'
+import { env } from '../env.js'
 import { logger } from '../logging/logger.js'
 import { registry, type Deps } from '../registry.js'
 
-export async function reactToAcknowledgeMessage(message: Message.TextMessage, { telegram }: Deps<'telegram'> = registry.export()) {
+export async function reactToAcknowledgeMessage(chatId: number, messageId: number, { telegram }: Deps<'telegram'> = registry.export()) {
   try {
-    await telegram.setMessageReaction(message.chat.id, message.message_id, [{ type: 'emoji', emoji: '👀' }])
+    await telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: env.USE_TEST_MODE ? '🤩' : '👀' }])
   } catch (err) {
     logger.warn({ err }, 'Could not react to message')
   }
 
   setTimeout(async () => {
     try {
-      telegram.setMessageReaction(message.chat.id, message.message_id, [])
+      telegram.setMessageReaction(chatId, messageId, [])
     } catch (err) {
       logger.warn({ err }, 'Could remove reactions from message')
     }
