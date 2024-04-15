@@ -5,7 +5,7 @@ import type { BucketQuery } from '../buckets/types.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
 import type { Note } from './types.js'
 
-export async function handleNote(
+export async function handleNewOrEditedNote(
   payload: {
     note: Note
     userId: number
@@ -19,6 +19,9 @@ export async function handleNote(
   const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
   if (!mirrorBucket) throw new Error('Bucket not found')
 
+  // TODO: find source bucket by mirror vendor entity instead of using link
+  //       this will require going through all connected buckets
+  //       but we can still use links to try to find the right bucket early
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
   const matchingLink = links.find(link => !link.template || match(note.content, link.template) !== undefined)
   if (!matchingLink) return

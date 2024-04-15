@@ -1,7 +1,7 @@
 import { stripIndent } from 'common-tags'
 import { Telegraf } from 'telegraf'
 import { editedMessage, message } from 'telegraf/filters'
-import { handleNote } from '../notes/handle-note.js'
+import { handleNewOrEditedNote } from '../notes/handle-new-or-edited-note.js'
 import { logger } from '../logging/logger.js'
 import { env } from '../env.js'
 import { formatTelegramUserName } from './format-telegram-user-name.js'
@@ -120,7 +120,7 @@ export async function startTelegramBot() {
       mirrorVendorEntity: createTelegramVendorEntity(message),
     }
 
-    await handleNote({
+    await handleNewOrEditedNote({
       note,
       userId,
       mirrorBucketQuery: {
@@ -139,7 +139,7 @@ export async function startTelegramBot() {
       await bot.telegram.deleteMessage(message.reply_to_message.chat.id, message.reply_to_message.message_id)
     }
 
-    await reactToAcknowledgeMessage(message)
+    await reactToAcknowledgeMessage(message.chat.id, message.message_id)
   })
 
   bot.on(editedMessage('text'), async (context) => {
@@ -153,7 +153,7 @@ export async function startTelegramBot() {
       mirrorVendorEntity: createTelegramVendorEntity(message),
     }
 
-    await handleNote({
+    await handleNewOrEditedNote({
       note,
       userId,
       mirrorBucketQuery: {
@@ -166,7 +166,7 @@ export async function startTelegramBot() {
       }
     })
 
-    await reactToAcknowledgeMessage(message)
+    await reactToAcknowledgeMessage(message.chat.id, message.message_id)
   })
 
   bot.catch(async (err, context) => {

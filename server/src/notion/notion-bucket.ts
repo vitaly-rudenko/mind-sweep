@@ -54,7 +54,7 @@ export class NotionBucket {
     if (!pageId) {
       const mirrorVendorEntityQuery: VendorEntityQuery | undefined = input.mirrorVendorEntityQuery || note.mirrorVendorEntity
       if (mirrorVendorEntityQuery) {
-        const page = await this.getNoteByMirrorVendorEntityQueryId({
+        const page = await this.getPageByMirrorVendorEntityQueryId({
           integration,
           bucket,
           mirrorVendorEntityQuery,
@@ -98,7 +98,7 @@ export class NotionBucket {
     })
   }
 
-  private async getNoteByMirrorVendorEntityQueryId(input: {
+  private async getPageByMirrorVendorEntityQueryId(input: {
     integration: Extract<Integration, { integrationType: 'notion' }>
     bucket: Extract<Bucket, { bucketType: 'notion_database' }>
     mirrorVendorEntityQuery: VendorEntityQuery
