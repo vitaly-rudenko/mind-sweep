@@ -9,7 +9,6 @@ import type { Note } from '../notes/types.js'
 import { createTelegramVendorEntity } from './create-telegram-vendor-entity.js'
 import { parseTelegramMessage } from './parse-telegram-message.js'
 import { getLocaleFromTelegramLanguageCode } from './get-locale-from-telegram-language-code.js'
-import { generateWebAppUrl } from '../web-app/generate-web-app-url.js'
 import { reactToAcknowledgeMessage } from './react-to-acknowledge-message.js'
 import { handleMirrorNoteDeleted } from '../notes/handle-mirror-note-deleted.js'
 import { handleMirrorNoteCreated } from '../notes/handle-mirror-note-created.js'
@@ -31,9 +30,18 @@ export async function startTelegramBot() {
     botInfo,
   })
 
-  bot.telegram.setMyCommands([
+  await bot.telegram.setChatMenuButton({
+    menuButton: {
+      text: 'App',
+      type: 'web_app',
+      web_app: {
+        url: env.WEB_APP_URL,
+      }
+    }
+  })
+
+  await bot.telegram.setMyCommands([
     { command: 'start', description: 'Get started' },
-    { command: 'app', description: 'Open the app' },
   ])
 
   bot.use((context, next) => {
@@ -60,12 +68,6 @@ export async function startTelegramBot() {
     context.state.locale = getLocaleFromTelegramLanguageCode(context.from.language_code)
 
     return next()
-  })
-
-  bot.command('app', async (context) => {
-    const message = await context.reply(generateWebAppUrl(), { link_preview_options: { is_disabled: true } })
-    await context.pinChatMessage(message.message_id, { disable_notification: true })
-    await context.deleteMessage()
   })
 
   bot.command('debug', async (context) => {
