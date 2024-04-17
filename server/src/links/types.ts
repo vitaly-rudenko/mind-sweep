@@ -6,4 +6,7 @@ export type Link = {
   priority: number
   template?: string
   defaultTags?: string[]
+  settings: {
+    stopOnMatch: boolean
+  }
 }

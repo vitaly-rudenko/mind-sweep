@@ -50,6 +50,7 @@ type LinkRow = {
   priority: number
   template: string | null
   default_tags: string[] | null
+  settings: any
 }
 
 export class PostgresStorage {
@@ -58,10 +59,10 @@ export class PostgresStorage {
   async createLink(link: Omit<Link, 'id' | 'priority'>): Promise<Link> {
     try {
       const { rows: [{ id, priority }] } = await this.client.query<LinkRow>(`
-        INSERT INTO links (user_id, mirror_bucket_id, source_bucket_id, template, default_tags, priority)
-        VALUES ($1, $2, $3, $4, $5, get_next_priority($1, $2))
+        INSERT INTO links (user_id, mirror_bucket_id, source_bucket_id, template, default_tags, priority, settings)
+        VALUES ($1, $2, $3, $4, $5, $6, get_next_priority($1, $2))
         RETURNING id, priority;
-      `, [link.userId, link.mirrorBucketId, link.sourceBucketId, link.template, link.defaultTags])
+      `, [link.userId, link.mirrorBucketId, link.sourceBucketId, link.template, link.defaultTags, link.settings])
 
       return { id, priority, ...link }
     } catch (err) {
@@ -85,8 +86,9 @@ export class PostgresStorage {
           , priority = $4
           , template = $5
           , default_tags = $6
+          , settings = $7
         WHERE user_id = $1 AND id = $2;
-      `, [userId, linkId, link.sourceBucketId, link.priority, link.template, link.defaultTags])
+      `, [userId, linkId, link.sourceBucketId, link.priority, link.template, link.defaultTags, link.settings])
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err) {
         if (err.code === '23505') {
@@ -344,6 +346,9 @@ export class PostgresStorage {
       priority: row.priority,
       template: row.template ?? undefined,
       defaultTags: row.default_tags ?? undefined,
+      settings: {
+        stopOnMatch: row.settings.stopOnMatch ?? false,
+      }
     }
   }
 }

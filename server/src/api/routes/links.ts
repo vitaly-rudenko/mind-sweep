@@ -7,6 +7,9 @@ const createLinkSchema = z.object({
   mirrorBucketId: z.number(),
   template: z.string().min(1).optional(),
   defaultTags: z.array(z.string().min(1)).min(1).optional(),
+  settings: z.object({
+    stopOnMatch: z.boolean(),
+  }),
 })
 
 const updateLinkSchema = z.object({
@@ -14,6 +17,9 @@ const updateLinkSchema = z.object({
   priority: z.number().min(0).max(999),
   template: z.string().min(1).optional(),
   defaultTags: z.array(z.string().min(1)).min(1).optional(),
+  settings: z.object({
+    stopOnMatch: z.boolean(),
+  }),
 })
 
 export function createLinksRouter() {
@@ -32,6 +38,7 @@ export function createLinksRouter() {
       mirrorBucketId: input.mirrorBucketId,
       template: input.template,
       defaultTags: input.defaultTags,
+      settings: input.settings,
     })
 
     res.sendStatus(201)
@@ -45,6 +52,7 @@ export function createLinksRouter() {
       priority: input.priority,
       template: input.template,
       defaultTags: input.defaultTags,
+      settings: input.settings,
     })
 
     res.sendStatus(204)
