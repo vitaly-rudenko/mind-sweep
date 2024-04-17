@@ -203,25 +203,30 @@ export class NotionBucket {
     return pages.results[0]
   }
 
-  private serializeNote(note: Note): NonNullable<UpdatePageParameters['properties'] | CreatePageParameters['properties']> {
+  private serializeNote(note: PartiallyNullable<Note>): NonNullable<UpdatePageParameters['properties'] | CreatePageParameters['properties']> {
     return {
-      'Name': {
-        type: 'title',
-        title: [
-          {
-            type: 'text',
-            text: {
-              content: note.content,
+      ...note.content !== undefined && {
+        'Name': note.content === null ? null : {
+          type: 'title',
+          title: [
+            {
+              type: 'text',
+              text: {
+                content: note.content,
+              },
             },
-          },
-        ],
+          ],
+        }
       },
-      'Tags': {
-        type: 'multi_select',
-        multi_select: note.tags.map(tag => ({ name: tag })),
+      ...note.tags !== undefined && {
+        'Tags': note.tags === null ? null : {
+          type: 'multi_select',
+          multi_select: note.tags.map(tag => ({ name: tag })),
+        },
       },
-      ...note.mirrorVendorEntity && {
-        'mind_sweep:mirror_vendor_entity': {
+      ...note.mirrorVendorEntity !== undefined && {
+        'mind_sweep:mirror_vendor_entity': note.mirrorVendorEntity === null ? null : {
+          // @ts-expect-error Weird error from Notion types
           type: 'rich_text',
           rich_text: [
             {
