@@ -14,3 +14,7 @@ export function match(input: { content: string; template: string }): {} | undefi
 
   return result || undefined
 }
+
+export function isMatching(input: { content: string; template: string }): boolean {
+  return match(input) !== undefined
+}
