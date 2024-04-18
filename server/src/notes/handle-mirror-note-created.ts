@@ -1,6 +1,7 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
-import { match } from '../templates/match.js'
+import { isMatching, match } from '../templates/match.js'
+import { createNote } from './create-note.js'
 import type { Note } from './types.js'
 
 export async function handleMirrorNoteCreated(
@@ -9,31 +10,32 @@ export async function handleMirrorNoteCreated(
     note: Note
     mirrorBucketQuery: BucketQuery
   },
-  { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-) {
+  { storage }: Deps<'storage'> = registry.export()
+): Promise<void> {
   const { userId, note, mirrorBucketQuery } = input
 
   const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
-  const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
-  if (!link) return
+  const processedSourceBucketIds = new Set<number>()
 
-  const sourceBucket = await storage.getBucketById(userId, link.sourceBucketId)
-  if (!sourceBucket) throw new Error(`Source bucket with ID ${link.sourceBucketId} not found`)
+  for (const link of links) {
+    if (processedSourceBucketIds.has(link.sourceBucketId)) continue
+    if (link.template && !isMatching({ content: note.content, template: link.template })) continue
 
-  if (sourceBucket.bucketType === 'notion_database') {
-    await notionBucket.createNote({
+    await createNote({
       userId,
-      bucketId: sourceBucket.id,
+      sourceBucketId: link.sourceBucketId,
       note: {
         content: note.content,
-        tags: [...note.tags, ...link?.defaultTags ?? []],
+        tags: [...note.tags, ...link.defaultTags ?? []],
         mirrorVendorEntity: note.mirrorVendorEntity,
       },
     })
-  } else {
-    throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
+
+    if (link.settings.stopOnMatch) break
+
+    processedSourceBucketIds.add(link.sourceBucketId)
   }
 }

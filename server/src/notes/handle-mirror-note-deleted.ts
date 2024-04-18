@@ -1,6 +1,7 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
+import { deleteNote } from './delete-note.js'
 
 export async function handleMirrorNoteDeleted(
   input: {
@@ -8,7 +9,7 @@ export async function handleMirrorNoteDeleted(
     mirrorBucketQuery: BucketQuery
     mirrorVendorEntityQuery: VendorEntityQuery
   },
-  { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
+  { storage }: Deps<'storage'> = registry.export()
 ): Promise<void> {
   const { userId, mirrorBucketQuery, mirrorVendorEntityQuery } = input
 
@@ -17,13 +18,10 @@ export async function handleMirrorNoteDeleted(
 
   const sourceBuckets = await storage.getLinkedSourceBuckets(userId, mirrorBucket.id)
   for (const sourceBucket of sourceBuckets) {
-    if (sourceBucket.bucketType === 'notion_database') {
-      await notionBucket.deleteNote({
-        bucket: sourceBucket,
-        mirrorVendorEntityQuery,
-      })
-    } else {
-      throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
-    }
+    await deleteNote({
+      userId,
+      sourceBucketId: sourceBucket.id,
+      mirrorVendorEntityQuery,
+    })
   }
 }

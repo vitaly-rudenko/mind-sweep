@@ -1,10 +1,10 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
-import { match } from '../templates/match.js'
+import { isMatching } from '../templates/match.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import { findSourcedNotes } from './find-sourced-notes.js'
-import { handleMirrorNoteCreated } from './handle-mirror-note-created.js'
+import { detachNote } from './detach-note.js'
 import type { Note } from './types.js'
+import { updateOrCreateNote } from './update-or-create-note.js'
 
 export async function handleMirrorNoteUpdated(
   input: {
@@ -13,44 +13,41 @@ export async function handleMirrorNoteUpdated(
     mirrorBucketQuery: BucketQuery
     mirrorVendorEntityQuery: VendorEntityQuery
   },
-  { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-) {
+  { storage }: Deps<'storage'> = registry.export()
+): Promise<void> {
   const { userId, note, mirrorBucketQuery, mirrorVendorEntityQuery } = input
 
   const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
-  const sourcedNotes = await findSourcedNotes({
-    userId,
-    mirrorBucketQuery,
-    mirrorVendorEntityQuery,
-  })
+  const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
 
-  for (const sourcedNote of sourcedNotes) {
-    const links = await storage.getLinksByBucketIds(userId, sourcedNote.sourceBucket.id, mirrorBucket.id)
-    const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
+  const processedSourceBucketIds = new Set<number>()
+  for (const link of links) {
+    if (processedSourceBucketIds.has(link.sourceBucketId)) continue
+    if (link.template && !isMatching({ content: note.content, template: link.template })) continue
 
-    if (sourcedNote.sourceBucket.bucketType === 'notion_database') {
-      await notionBucket.updateNote({
-        userId,
-        bucketId: sourcedNote.sourceBucket.id,
-        note: {
-          content: note.content,
-          tags: [...note.tags, ...link?.defaultTags ?? []],
-          mirrorVendorEntity: note.mirrorVendorEntity,
-          sourceVendorEntity: sourcedNote.note.sourceVendorEntity,
-        },
-      })
-    } else {
-      throw new Error(`Unsupported source bucket type: ${sourcedNote.sourceBucket.bucketType}`)
-    }
+    await updateOrCreateNote({
+      userId,
+      sourceBucketId: link.sourceBucketId,
+      note: {
+        content: note.content,
+        tags: [...note.tags, ...link.defaultTags ?? []],
+        mirrorVendorEntity: note.mirrorVendorEntity,
+      },
+    })
+
+    if (link.settings.stopOnMatch) break
+
+    processedSourceBucketIds.add(link.sourceBucketId)
   }
 
-  if (sourcedNotes.length === 0) {
-    await handleMirrorNoteCreated({
+  const unprocessedSourceBucketIds = links.map(link => link.sourceBucketId).filter(id => !processedSourceBucketIds.has(id))
+  for (const sourceBucketId of unprocessedSourceBucketIds) {
+    await detachNote({
       userId,
-      note,
-      mirrorBucketQuery,
+      sourceBucketId,
+      mirrorVendorEntityQuery,
     })
   }
 }

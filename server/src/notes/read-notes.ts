@@ -14,7 +14,7 @@ export async function readNotes(
   if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
 
   if (bucket.bucketType === 'notion_database' && integration.integrationType === 'notion') {
-    return notionBucket.read({ bucket, integration })
+    return notionBucket.readNotes({ bucket, integration })
   } else {
     throw new Error('Unsupported source bucket type')
   }
