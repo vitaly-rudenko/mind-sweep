@@ -5,6 +5,7 @@ import { TelegramError } from 'telegraf'
 import { createVendorEntityHash } from '../vendor-entities/create-vendor-entity-hash.js'
 import { createTelegramVendorEntity } from '../telegram/create-telegram-vendor-entity.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
+import { logger } from '../logging/logger.js'
 
 export async function updateOrCreateMirrorNote(
   input: {
@@ -36,10 +37,19 @@ export async function updateOrCreateMirrorNote(
           }
         } catch (err) {
           if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be edited') {
-            const message = await telegram.sendMessage(note.mirrorVendorEntity.metadata.chatId, note.content)
+            const message = await telegram.sendMessage(mirrorBucket.metadata.chatId, note.content, {
+              reply_parameters: {
+                chat_id: note.mirrorVendorEntity.metadata.chatId,
+                message_id: note.mirrorVendorEntity.metadata.messageId,
+              }
+            })
 
-            // TODO: catch errors
-            await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
+            // Remove old message if possible
+            try {
+              await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
+            } catch (err) {
+              logger.error({ err }, 'Could not delete message')
+            }
 
             return {
               ...note,

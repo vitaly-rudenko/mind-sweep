@@ -1,3 +1,4 @@
+import { logger } from '../logging/logger.js'
 import { type Deps, registry } from '../registry.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 import type { Note } from './types.js'
@@ -18,13 +19,16 @@ export async function deleteMirrorNote(
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
   if (!isNoteStoredInMirrorBucket(note, mirrorBucket)) {
-    throw new Error('Note does not belong to mirror bucket')
+    throw new Error('Note is not stored in this Mirror Bucket')
   }
 
   if (mirrorBucket.bucketType === 'telegram_chat') {
     if (note.mirrorVendorEntity.vendorEntityType === 'telegram_message') {
-      // TODO: catch errors
-      await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
+      try {
+        await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
+      } catch (err) {
+        logger.error({ err }, 'Could not delete message')
+      }
     } else {
       throw new Error('Unsupported vendor entity type for given bucket type')
     }
