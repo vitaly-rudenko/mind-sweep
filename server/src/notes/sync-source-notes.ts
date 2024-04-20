@@ -1,9 +1,11 @@
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
+import { VendorEntityQuery, type VendorEntity } from '../vendor-entities/types.js'
 import { deleteMirrorNote } from './delete-mirror-note.js'
 import { detachSourceNote } from './detach-source-note.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 import { readSourceNotes } from './read-source-notes.js'
+import type { Note } from './types.js'
 import { updateOrCreateMirrorNote } from './update-or-create-mirror-note.js'
 import { updateOrCreateSourceNote } from './update-or-create-source-note.js'
 
@@ -22,6 +24,8 @@ export async function syncSourceNotes(
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
   const sourceBucketIds = new Set(links.map(link => link.sourceBucketId))
 
+  const updatedMirrorVendorEntities: { originalMirrorVendorEntityQuery: VendorEntityQuery; updatedMirrorVendorEntity: VendorEntity }[] = []
+
   for (const sourceBucketId of sourceBucketIds) {
     const notes = await readSourceNotes({ userId, bucketId: sourceBucketId })
 
@@ -32,7 +36,15 @@ export async function syncSourceNotes(
       const matchingLinkBeforeStoppedForSourceBucket = matchingLinksBeforeStopped.find(link => link.sourceBucketId === sourceBucketId)
 
       if (matchingLinkBeforeStoppedForSourceBucket) {
-        let noteToUpdate = note
+        const updatedMirrorVendorEntity = updatedMirrorVendorEntities.find(entry => (
+          entry.originalMirrorVendorEntityQuery.vendorEntityType === note.mirrorVendorEntity?.vendorEntityType &&
+          entry.originalMirrorVendorEntityQuery.id === note.mirrorVendorEntity?.id
+        ))?.updatedMirrorVendorEntity
+
+        let noteToUpdate: Note = {
+          ...note,
+          mirrorVendorEntity: updatedMirrorVendorEntity ?? note.mirrorVendorEntity,
+        }
 
         if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
           await deleteMirrorNote({ note })
@@ -48,6 +60,13 @@ export async function syncSourceNotes(
           mirrorBucketId,
           note: noteToUpdate,
         })
+
+        if (note.mirrorVendorEntity && mirrorNote.mirrorVendorEntity) {
+          updatedMirrorVendorEntities.push({
+            originalMirrorVendorEntityQuery: note.mirrorVendorEntity,
+            updatedMirrorVendorEntity: mirrorNote.mirrorVendorEntity,
+          })
+        }
 
         await updateOrCreateSourceNote({
           userId,
