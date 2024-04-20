@@ -1,5 +1,5 @@
 import { type Deps, registry } from '../registry.js'
-import { doesNoteBelongToMirrorBucket } from './does-note-belong-to-mirror-bucket.js'
+import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 import type { Note } from './types.js'
 
 export async function deleteMirrorNote(
@@ -17,7 +17,7 @@ export async function deleteMirrorNote(
   const mirrorBucket = await storage.getBucketById(userId, mirrorBucketId)
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
-  if (!doesNoteBelongToMirrorBucket(note, mirrorBucket)) {
+  if (!isNoteStoredInMirrorBucket(note, mirrorBucket)) {
     throw new Error('Note does not belong to mirror bucket')
   }
 

@@ -2,7 +2,7 @@ import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
 import { deleteMirrorNote } from './delete-mirror-note.js'
 import { detachSourceNote } from './detach-source-note.js'
-import { doesNoteBelongToMirrorBucket } from './does-note-belong-to-mirror-bucket.js'
+import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 import { readSourceNotes } from './read-source-notes.js'
 import { updateOrCreateMirrorNote } from './update-or-create-mirror-note.js'
 import { updateOrCreateSourceNote } from './update-or-create-source-note.js'
@@ -29,7 +29,7 @@ export async function syncSourceNotes(
       const link = links.find(link => !link.template || isMatching({ content: note.content, template: link.template }))
 
       if (link?.sourceBucketId === sourceBucketId) {
-        if (note.mirrorVendorEntity && !doesNoteBelongToMirrorBucket(note, mirrorBucket)) {
+        if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
           await deleteMirrorNote({
             userId,
             mirrorBucketId,
@@ -48,7 +48,7 @@ export async function syncSourceNotes(
           sourceBucketId,
           note: mirrorNote,
         })
-      } else if (note.mirrorVendorEntity && doesNoteBelongToMirrorBucket(note, mirrorBucket)) {
+      } else if (note.mirrorVendorEntity && isNoteStoredInMirrorBucket(note, mirrorBucket)) {
         await detachSourceNote({
           userId,
           sourceBucketId,

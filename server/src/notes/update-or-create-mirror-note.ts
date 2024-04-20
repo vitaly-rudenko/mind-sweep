@@ -4,7 +4,7 @@ import type { Note } from './types.js'
 import { TelegramError } from 'telegraf'
 import { createVendorEntityHash } from '../vendor-entities/create-vendor-entity-hash.js'
 import { createTelegramVendorEntity } from '../telegram/create-telegram-vendor-entity.js'
-import { doesNoteBelongToMirrorBucket } from './does-note-belong-to-mirror-bucket.js'
+import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 
 export async function updateOrCreateMirrorNote(
   input: {
@@ -19,7 +19,7 @@ export async function updateOrCreateMirrorNote(
   const mirrorBucket = await storage.getBucketById(userId, mirrorBucketId)
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
-  if (!doesNoteBelongToMirrorBucket(note, mirrorBucket)) {
+  if (!isNoteStoredInMirrorBucket(note, mirrorBucket)) {
     throw new Error('Note does not belong to mirror bucket')
   }
 
