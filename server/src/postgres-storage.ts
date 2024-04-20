@@ -59,7 +59,7 @@ export class PostgresStorage {
   async createLink(link: Omit<Link, 'id' | 'priority'>): Promise<Link> {
     try {
       const { rows: [{ id, priority }] } = await this.client.query<LinkRow>(`
-        INSERT INTO links (user_id, mirror_bucket_id, source_bucket_id, template, default_tags, priority, settings)
+        INSERT INTO links (user_id, mirror_bucket_id, source_bucket_id, template, default_tags, settings, priority)
         VALUES ($1, $2, $3, $4, $5, $6, get_next_priority($1, $2))
         RETURNING id, priority;
       `, [link.userId, link.mirrorBucketId, link.sourceBucketId, link.template, link.defaultTags, link.settings])
