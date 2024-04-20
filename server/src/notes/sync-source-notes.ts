@@ -24,7 +24,7 @@ export async function syncSourceNotes(
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
   const sourceBucketIds = new Set(links.map(link => link.sourceBucketId))
 
-  const updatedMirrorVendorEntities: { originalMirrorVendorEntityQuery: VendorEntityQuery; updatedMirrorVendorEntity: VendorEntity }[] = []
+  const updatedMirrorNotes: { originalMirrorVendorEntityQuery: VendorEntityQuery; updatedMirrorNote: Note }[] = []
 
   for (const sourceBucketId of sourceBucketIds) {
     const notes = await readSourceNotes({ userId, bucketId: sourceBucketId })
@@ -36,14 +36,15 @@ export async function syncSourceNotes(
       const matchingLinkBeforeStoppedForSourceBucket = matchingLinksBeforeStopped.find(link => link.sourceBucketId === sourceBucketId)
 
       if (matchingLinkBeforeStoppedForSourceBucket) {
-        const updatedMirrorVendorEntity = updatedMirrorVendorEntities.find(entry => (
+        const updatedMirrorNote = updatedMirrorNotes.find(entry => (
           entry.originalMirrorVendorEntityQuery.vendorEntityType === note.mirrorVendorEntity?.vendorEntityType &&
           entry.originalMirrorVendorEntityQuery.id === note.mirrorVendorEntity?.id
-        ))?.updatedMirrorVendorEntity
+        ))?.updatedMirrorNote
 
         let noteToUpdate: Note = {
           ...note,
-          mirrorVendorEntity: updatedMirrorVendorEntity ?? note.mirrorVendorEntity,
+          ...updatedMirrorNote,
+          sourceVendorEntity: note.sourceVendorEntity,
         }
 
         if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
@@ -62,9 +63,9 @@ export async function syncSourceNotes(
         })
 
         if (note.mirrorVendorEntity && mirrorNote.mirrorVendorEntity) {
-          updatedMirrorVendorEntities.push({
+          updatedMirrorNotes.push({
             originalMirrorVendorEntityQuery: note.mirrorVendorEntity,
-            updatedMirrorVendorEntity: mirrorNote.mirrorVendorEntity,
+            updatedMirrorNote: mirrorNote,
           })
         }
 
