@@ -1,7 +1,7 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching, match } from '../templates/match.js'
-import { createNote } from './create-note.js'
+import { createSourceNote } from './create-source-note.js'
 import type { Note } from './types.js'
 
 export async function handleMirrorNoteCreated(
@@ -24,7 +24,7 @@ export async function handleMirrorNoteCreated(
     if (processedSourceBucketIds.has(link.sourceBucketId)) continue
     if (link.template && !isMatching({ content: note.content, template: link.template })) continue
 
-    await createNote({
+    await createSourceNote({
       userId,
       sourceBucketId: link.sourceBucketId,
       note: {

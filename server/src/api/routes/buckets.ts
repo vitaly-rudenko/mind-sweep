@@ -1,15 +1,13 @@
 import Router from 'express-promise-router'
 import { z } from 'zod'
 import { registry } from '../../registry.js'
-import { env } from '../../env.js'
 import { formatTelegramUserName } from '../../telegram/format-telegram-user-name.js'
 import { initDataUserSchema } from '../../web-app/schemas.js'
 import { Client } from '@notionhq/client'
-import { ApiError, NotFoundError } from '../../errors.js'
+import { ApiError } from '../../errors.js'
 import { checkWebAppSignature } from '../../web-app/check-web-app-signature.js'
-import { readNotes } from '../../notes/read-notes.js'
-import { match } from '../../templates/match.js'
-import { syncNote } from '../../notes/sync-note.js'
+import { readSourceNotes } from '../../notes/read-source-notes.js'
+import { syncNotes } from '../../notes/sync-notes.js'
 
 const createBucketSchema = z.discriminatedUnion('bucketType', [
   z.object({
@@ -118,20 +116,10 @@ export function createBucketsRouter() {
   })
 
   router.post('/buckets/:id/syncs', async (req, res) => {
-    const userId = req.user.id
-
-    const sourceBucket = await storage.getBucketById(userId, Number(req.params.id))
-    if (!sourceBucket) throw new NotFoundError()
-
-    const links = await storage.getLinksBySourceBucketId(userId, sourceBucket.id)
-    const notes = await readNotes({ userId, bucketId: sourceBucket.id })
-
-    for (const note of notes) {
-      const link = links.find(link => !link.template || match({ content: note.content, template: link.template }) !== undefined)
-      if (link) {
-        await syncNote({ note, link, userId })
-      }
-    }
+    await syncNotes({
+      userId: req.user.id,
+      mirrorBucketId: Number(req.params.id),
+    })
 
     res.sendStatus(201)
   })
@@ -142,7 +130,7 @@ export function createBucketsRouter() {
   })
 
   router.get('/buckets/:id/notes', async (req, res) => {
-    const notes = await readNotes({ userId: req.user.id, bucketId: Number(req.params.id) })
+    const notes = await readSourceNotes({ userId: req.user.id, bucketId: Number(req.params.id) })
     res.json({ items: notes })
   })
 

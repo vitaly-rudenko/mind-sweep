@@ -1,7 +1,7 @@
 import { type Deps, registry } from '../registry.js'
 import type { Note } from './types.js'
 
-export async function readNotes(
+export async function readSourceNotes(
   input: { userId: number; bucketId: number },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
 ): Promise<Note[]> {

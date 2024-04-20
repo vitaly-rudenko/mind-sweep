@@ -2,9 +2,9 @@ import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import { detachNote } from './detach-note.js'
+import { detachSourceNote } from './detach-source-note.js'
 import type { Note } from './types.js'
-import { updateOrCreateNote } from './update-or-create-note.js'
+import { updateOrCreateSourceNote } from './update-or-create-source-note.js'
 
 export async function handleMirrorNoteUpdated(
   input: {
@@ -27,7 +27,7 @@ export async function handleMirrorNoteUpdated(
     if (processedSourceBucketIds.has(link.sourceBucketId)) continue
     if (link.template && !isMatching({ content: note.content, template: link.template })) continue
 
-    await updateOrCreateNote({
+    await updateOrCreateSourceNote({
       userId,
       sourceBucketId: link.sourceBucketId,
       note: {
@@ -44,7 +44,7 @@ export async function handleMirrorNoteUpdated(
 
   const unprocessedSourceBucketIds = links.map(link => link.sourceBucketId).filter(id => !processedSourceBucketIds.has(id))
   for (const sourceBucketId of unprocessedSourceBucketIds) {
-    await detachNote({
+    await detachSourceNote({
       userId,
       sourceBucketId,
       mirrorVendorEntityQuery,

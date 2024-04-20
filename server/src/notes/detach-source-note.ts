@@ -1,24 +1,21 @@
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import type { Note } from './types.js'
 
-export async function storeNote(
-  payload: {
-    note: Note
+export async function detachSourceNote(
+  input: {
     userId: number
     sourceBucketId: number
-    mirrorVendorEntityQuery?: VendorEntityQuery
+    mirrorVendorEntityQuery: VendorEntityQuery
   },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-) {
-  const { note, userId, sourceBucketId, mirrorVendorEntityQuery } = payload
+): Promise<void> {
+  const { userId, sourceBucketId, mirrorVendorEntityQuery } = input
 
   const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
-  if (!sourceBucket) throw new Error(`Bucket with ID ${sourceBucketId} not found`)
+  if (!sourceBucket) throw new Error('Source bucket not found')
 
   if (sourceBucket.bucketType === 'notion_database') {
-    await notionBucket.storeNote({
-      note,
+    await notionBucket.detachNote({
       userId,
       bucketId: sourceBucket.id,
       mirrorVendorEntityQuery,

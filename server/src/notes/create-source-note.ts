@@ -1,25 +1,21 @@
 import { type Deps, registry } from '../registry.js'
-import type { VendorEntityQuery } from '../vendor-entities/types.js'
+import type { Note } from './types.js'
 
-export async function detachNote(
+export async function createSourceNote(
   input: {
+    note: Note
     userId: number
     sourceBucketId: number
-    mirrorVendorEntityQuery: VendorEntityQuery
   },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
 ): Promise<void> {
-  const { userId, sourceBucketId, mirrorVendorEntityQuery } = input
+  const { note, userId, sourceBucketId } = input
 
   const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
-  if (!sourceBucket) throw new Error('Source bucket not found')
+  if (!sourceBucket) throw new Error(`Source bucket with ID ${sourceBucketId} not found`)
 
   if (sourceBucket.bucketType === 'notion_database') {
-    await notionBucket.detachNote({
-      userId,
-      bucketId: sourceBucket.id,
-      mirrorVendorEntityQuery,
-    })
+    await notionBucket.createNote({ userId, bucketId: sourceBucket.id, note })
   } else {
     throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
   }

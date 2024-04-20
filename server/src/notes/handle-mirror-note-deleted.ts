@@ -1,7 +1,7 @@
 import type { BucketQuery } from '../buckets/types.js'
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import { deleteNote } from './delete-note.js'
+import { deleteSourceNote } from './delete-source-note.js'
 
 export async function handleMirrorNoteDeleted(
   input: {
@@ -18,7 +18,7 @@ export async function handleMirrorNoteDeleted(
 
   const sourceBuckets = await storage.getLinkedSourceBuckets(userId, mirrorBucket.id)
   for (const sourceBucket of sourceBuckets) {
-    await deleteNote({
+    await deleteSourceNote({
       userId,
       sourceBucketId: sourceBucket.id,
       mirrorVendorEntityQuery,
