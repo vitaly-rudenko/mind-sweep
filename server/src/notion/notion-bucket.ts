@@ -35,17 +35,18 @@ export class NotionBucket {
   async updateOrCreateNote(input: {
     userId: number
     bucketId: number
+    mirrorVendorEntityQuery?: VendorEntityQuery
     note: Note
   }): Promise<void> {
-    const { note, bucketId, userId } = input
+    const { note, mirrorVendorEntityQuery, bucketId, userId } = input
     const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
 
     let pageId: string | undefined
     if (note.sourceVendorEntity) {
       if (note.sourceVendorEntity.vendorEntityType !== 'notion_page') throw new Error(`Invalid source vendor entity type: ${note.sourceVendorEntity.vendorEntityType}`)
       pageId = note.sourceVendorEntity.metadata.pageId
-    } else if (note.mirrorVendorEntity) {
-      const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery: note.mirrorVendorEntity })
+    } else if (mirrorVendorEntityQuery) {
+      const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery })
       pageId = page?.id
     }
 

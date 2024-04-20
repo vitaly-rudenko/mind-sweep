@@ -36,19 +36,30 @@ export async function updateOrCreateMirrorNote(
             }
           }
         } catch (err) {
-          if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be edited') {
-            const message = await telegram.sendMessage(mirrorBucket.metadata.chatId, note.content, {
-              reply_parameters: {
-                chat_id: note.mirrorVendorEntity.metadata.chatId,
-                message_id: note.mirrorVendorEntity.metadata.messageId,
+          if (err instanceof TelegramError && ['Bad Request: message to edit not found', 'Bad Request: message can\'t be edited'].includes(err.response.description)) {
+            let message: Message.TextMessage
+            try {
+              message = await telegram.sendMessage(mirrorBucket.metadata.chatId, note.content, {
+                reply_parameters: {
+                  chat_id: note.mirrorVendorEntity.metadata.chatId,
+                  message_id: note.mirrorVendorEntity.metadata.messageId,
+                }
+              })
+            } catch (err) {
+              if (err instanceof TelegramError && err.response.description === 'Bad Request: message to reply not found') {
+                message = await telegram.sendMessage(mirrorBucket.metadata.chatId, note.content)
+              } else {
+                throw err
               }
-            })
+            }
 
             // Remove old message if possible
             try {
               await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
             } catch (err) {
-              logger.error({ err }, 'Could not delete message')
+              if (err instanceof TelegramError && err.response.description !== 'Bad Request: message to delete not found') {
+                logger.error({ err }, 'Could not delete message')
+              }
             }
 
             return {

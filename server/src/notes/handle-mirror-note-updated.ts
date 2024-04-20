@@ -30,6 +30,7 @@ export async function handleMirrorNoteUpdated(
     await updateOrCreateSourceNote({
       userId,
       sourceBucketId: link.sourceBucketId,
+      mirrorVendorEntityQuery,
       note: {
         content: note.content,
         tags: [...note.tags, ...link.defaultTags ?? []],

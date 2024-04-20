@@ -26,18 +26,27 @@ export async function syncSourceNotes(
     const notes = await readSourceNotes({ userId, bucketId: sourceBucketId })
 
     for (const note of notes) {
-      const link = links.find(link => !link.template || isMatching({ content: note.content, template: link.template }))
+      const matchingLinks = links.filter(link => !link.template || isMatching({ content: note.content, template: link.template }))
+      const stopOnMatchIndex = matchingLinks.findIndex(link => link.settings.stopOnMatch)
+      const matchingLinksBeforeStopped = stopOnMatchIndex === -1 ? matchingLinks : matchingLinks.slice(0, stopOnMatchIndex + 1)
+      const matchingLinkBeforeStoppedForSourceBucket = matchingLinksBeforeStopped.find(link => link.sourceBucketId === sourceBucketId)
 
-      if (link?.sourceBucketId === sourceBucketId) {
+      if (matchingLinkBeforeStoppedForSourceBucket) {
+        let noteToUpdate = note
+
         if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
           await deleteMirrorNote({ note })
-          delete note.mirrorVendorEntity
+
+          noteToUpdate = {
+            ...note,
+            mirrorVendorEntity: undefined,
+          }
         }
 
         const mirrorNote = await updateOrCreateMirrorNote({
           userId,
           mirrorBucketId,
-          note,
+          note: noteToUpdate,
         })
 
         await updateOrCreateSourceNote({
