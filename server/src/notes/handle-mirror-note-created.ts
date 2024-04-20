@@ -34,8 +34,8 @@ export async function handleMirrorNoteCreated(
       },
     })
 
-    if (link.settings.stopOnMatch) break
-
     processedSourceBucketIds.add(link.sourceBucketId)
+
+    if (link.settings.stopOnMatch) break
   }
 }

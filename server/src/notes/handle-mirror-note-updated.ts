@@ -38,9 +38,9 @@ export async function handleMirrorNoteUpdated(
       },
     })
 
-    if (link.settings.stopOnMatch) break
-
     processedSourceBucketIds.add(link.sourceBucketId)
+
+    if (link.settings.stopOnMatch) break
   }
 
   const unprocessedSourceBucketIds = links.map(link => link.sourceBucketId).filter(id => !processedSourceBucketIds.has(id))
