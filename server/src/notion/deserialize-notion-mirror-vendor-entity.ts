@@ -1,7 +1,7 @@
 import { oneLineTrim } from 'common-tags'
 import type { VendorEntity } from '../vendor-entities/types.js'
 
-export const SERIALIZED_VENDOR_ENTITY_REGEX = new RegExp(oneLineTrim`
+const SERIALIZED_VENDOR_ENTITY_REGEX = new RegExp(oneLineTrim`
   ^(?<vendorEntityType>.+?)
   :(?<id>.+?)
   :(?<serializedMetadata>\{.+\})
