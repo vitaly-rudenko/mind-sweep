@@ -18,7 +18,7 @@ box Vendor
 participant source as Source bucket
 end
 
-mirror ->>+ app: New Note
+mirror ->>+ app: Note created
 app ->> db: Get links for the Mirror Bucket
 db ->> app: [Links]
 
@@ -36,6 +36,7 @@ loop Every Link
     end
   end
 end
+
 app ->>- mirror: OK
 ```
 
