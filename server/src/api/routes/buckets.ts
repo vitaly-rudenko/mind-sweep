@@ -7,7 +7,7 @@ import { Client } from '@notionhq/client'
 import { ApiError } from '../../errors.js'
 import { checkWebAppSignature } from '../../web-app/check-web-app-signature.js'
 import { readSourceNotes } from '../../notes/read-source-notes.js'
-import { syncNotes } from '../../notes/sync-notes.js'
+import { syncSourceNotes } from '../../notes/sync-source-notes.js'
 
 const createBucketSchema = z.discriminatedUnion('bucketType', [
   z.object({
@@ -116,7 +116,7 @@ export function createBucketsRouter() {
   })
 
   router.post('/buckets/:id/syncs', async (req, res) => {
-    await syncNotes({
+    await syncSourceNotes({
       userId: req.user.id,
       mirrorBucketId: Number(req.params.id),
     })

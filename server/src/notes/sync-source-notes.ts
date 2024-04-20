@@ -7,7 +7,7 @@ import { readSourceNotes } from './read-source-notes.js'
 import { updateOrCreateMirrorNote } from './update-or-create-mirror-note.js'
 import { updateOrCreateSourceNote } from './update-or-create-source-note.js'
 
-export async function syncNotes(
+export async function syncSourceNotes(
   input: {
     userId: number
     mirrorBucketId: number
