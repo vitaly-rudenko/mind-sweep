@@ -10,7 +10,7 @@ import {
 } from '@/components/drawer'
 import { type FC, useCallback, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Form, FormField, FormItem } from '@/components/form'
+import { Form, FormControl, FormField, FormItem } from '@/components/form'
 import { createToast, dismissToast } from '@/utils/toast'
 import { useCreateLinkMutation, useUpdateLinkMutation } from './api'
 import { ApiError } from '@/utils/api'
@@ -19,12 +19,17 @@ import { BucketCombobox } from './bucket-combobox'
 import { ArrowDown } from 'lucide-react'
 import { Input } from '@/components/input'
 import { bucketTypeName } from './bucket-type-name'
+import { Checkbox } from '@/components/checkbox'
+import { Label } from '@/components/label'
 
 type FormState = {
   sourceBucket: Bucket | ''
   mirrorBucket: Bucket | ''
   template: string
   defaultTags: string
+  settings: {
+    stopOnMatch: boolean
+  }
 }
 
 const defaultValues: FormState = {
@@ -32,6 +37,9 @@ const defaultValues: FormState = {
   mirrorBucket: '',
   template: '',
   defaultTags: '',
+  settings: {
+    stopOnMatch: true,
+  },
 }
 
 export const LinkEditor: FC<{
@@ -60,6 +68,7 @@ export const LinkEditor: FC<{
         sourceBucketId: formState.sourceBucket.id,
         template: formState.template || undefined,
         defaultTags: defaultTags.length > 0 ? defaultTags : undefined,
+        settings: formState.settings,
       }
 
       if (link) {
@@ -100,6 +109,7 @@ export const LinkEditor: FC<{
           template: link.template ?? '',
           mirrorBucket: buckets.find((bucket) => bucket.id === link.mirrorBucketId) ?? '',
           sourceBucket: buckets.find((bucket) => bucket.id === link.sourceBucketId) ?? '',
+          settings: link.settings,
         } : {}
       })
     }
@@ -173,6 +183,22 @@ export const LinkEditor: FC<{
                         placeholder='Default tags (optional)'
                         type='text'
                       />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='settings.stopOnMatch'
+                  render={({ field }) => (
+                    <FormItem className='pt-1'>
+                      <Label className='cursor-pointer flex flex-row items-center gap-1.5'>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                        <div>Stop on match</div>
+                      </Label>
                     </FormItem>
                   )}
                 />

@@ -217,8 +217,6 @@ const LinkComponent: FC<{
   const sourceBucket = buckets.find((b) => b.id === link.sourceBucketId)
   if (!sourceBucket) return null
 
-  const hasContent = Boolean(link.template || link.defaultTags)
-
   return <div className='flex flex-row items-center gap-2 pl-2'>
     <CornerDownRight className='inline size-6 shrink-0 text-primary' />
     <Card className={cn(
@@ -236,10 +234,14 @@ const LinkComponent: FC<{
             <CardDescription className='text-primary whitespace-nowrap'>{bucketTypeName(sourceBucket.bucketType)}</CardDescription>
           </CardTitle>
         </CardHeader>
-        {!!hasContent && (
+        {!!(link.template || link.defaultTags || link.settings.stopOnMatch) && (
           <CardContent>
-            {!!link.template && <div className='text-sm text-primary font-mono'>{link.template}</div>}
-            {!!link.defaultTags && <div className='text-sm text-primary'>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</div>}
+            {!!(link.template || link.defaultTags) && (
+              <div className='text-sm text-primary'>
+                {!!link.template && <>{link.template}</>} {!!link.defaultTags && <>{link.defaultTags.map(tag => `#${tag}`).join(' ')}</>}
+              </div>
+            )}
+            {!!link.settings.stopOnMatch && <div className='text-sm text-primary'>Stop on match</div>}
           </CardContent>
         )}
       </div>

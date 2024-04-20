@@ -78,6 +78,9 @@ type CreateLinkInput = {
   mirrorBucketId: number
   template?: string
   defaultTags?: string[]
+  settings: {
+    stopOnMatch: boolean
+  }
 }
 
 export const useCreateLinkMutation = () => {
@@ -103,6 +106,9 @@ type UpdateLinkInput = {
   sourceBucketId: number
   template?: string
   defaultTags?: string[]
+  settings: {
+    stopOnMatch: boolean
+  }
 }
 
 export const useUpdateLinkMutation = () => {
