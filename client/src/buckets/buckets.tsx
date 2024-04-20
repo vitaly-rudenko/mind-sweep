@@ -167,7 +167,7 @@ const BucketComponent: FC<{
       <div className={cn('transition-all', expanded ? 'h-10' : 'h-0 opacity-0')}>
         <Separator />
         <CardFooter className='flex flex-row items-stretch p-0 h-full bg-background'>
-          {!!isSourceable && <Button onClick={onSync} variant='link' className='grow basis-1'>Sync all Notes</Button>}
+          {!!isMirrorable && <Button onClick={onSync} variant='link' className='grow basis-1'>Sync all Notes</Button>}
           <Button onClick={onDelete} variant='link' className='grow basis-1 text-destructive'>Delete</Button>
         </CardFooter>
       </div>

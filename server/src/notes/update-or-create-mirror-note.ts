@@ -20,7 +20,7 @@ export async function updateOrCreateMirrorNote(
   const mirrorBucket = await storage.getBucketById(userId, mirrorBucketId)
   if (!mirrorBucket) throw new Error('Mirror bucket not found')
 
-  if (!isNoteStoredInMirrorBucket(note, mirrorBucket)) {
+  if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
     throw new Error('Note does not belong to mirror bucket')
   }
 

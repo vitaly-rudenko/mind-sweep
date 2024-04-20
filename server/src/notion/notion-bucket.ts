@@ -152,33 +152,33 @@ export class NotionBucket {
   private serializeNote(note: PartiallyNullable<Note>): NonNullable<UpdatePageParameters['properties'] | CreatePageParameters['properties']> {
     return {
       ...note.content !== undefined && {
-        'Name': note.content === null ? null : {
+        'Name': {
           type: 'title',
           title: [
             {
               type: 'text',
               text: {
-                content: note.content,
+                content: note.tags === null ? '' : note.content,
               },
             },
           ],
         }
       },
       ...note.tags !== undefined && {
-        'Tags': note.tags === null ? null : {
+        'Tags': {
           type: 'multi_select',
-          multi_select: note.tags.map(tag => ({ name: tag })),
+          multi_select: note.tags === null ? [] : note.tags.map(tag => ({ name: tag })),
         },
       },
       ...note.mirrorVendorEntity !== undefined && {
-        'mind_sweep:mirror_vendor_entity': note.mirrorVendorEntity === null ? null : {
+        'mind_sweep:mirror_vendor_entity': {
           // @ts-expect-error Weird error from Notion types
           type: 'rich_text',
           rich_text: [
             {
               type: 'text',
               text: {
-                content: serializeNotionMirrorVendorEntity(note.mirrorVendorEntity),
+                content: note.mirrorVendorEntity === null ? '' : serializeNotionMirrorVendorEntity(note.mirrorVendorEntity),
               },
             },
           ],

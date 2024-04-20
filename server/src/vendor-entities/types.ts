@@ -10,6 +10,7 @@ export type VendorEntity = {
 } | {
   vendorEntityType: 'notion_page'
   metadata: {
+    databaseId: string
     pageId: string
   }
 })

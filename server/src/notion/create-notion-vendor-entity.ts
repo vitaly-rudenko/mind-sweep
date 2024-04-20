@@ -12,6 +12,7 @@ export function createNotionVendorEntity(input: {
     id: `${databaseId}_${pageId}`,
     vendorEntityType: 'notion_page',
     metadata: {
+      databaseId,
       pageId,
     },
     hash: createVendorEntityHash(content),

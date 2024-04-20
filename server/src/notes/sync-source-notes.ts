@@ -30,11 +30,8 @@ export async function syncSourceNotes(
 
       if (link?.sourceBucketId === sourceBucketId) {
         if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
-          await deleteMirrorNote({
-            userId,
-            mirrorBucketId,
-            note,
-          })
+          await deleteMirrorNote({ note })
+          delete note.mirrorVendorEntity
         }
 
         const mirrorNote = await updateOrCreateMirrorNote({
