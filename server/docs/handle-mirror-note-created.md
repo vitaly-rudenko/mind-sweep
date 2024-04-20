@@ -19,7 +19,7 @@ participant source as Source bucket
 end
 
 mirror ->>+ app: Note created
-app ->> db: Get links for the Mirror Bucket
+app ->> db: Get Links for the Mirror Bucket
 db ->> app: [Links]
 
 loop Every Link
