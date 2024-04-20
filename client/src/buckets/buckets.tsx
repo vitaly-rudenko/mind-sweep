@@ -154,7 +154,6 @@ const BucketComponent: FC<{
   const [expandedLink, setExpandedLink] = useState<Link>()
 
   const isMirrorable = bucket.bucketType === 'telegram_chat'
-  const isSourceable = bucket.bucketType === 'notion_database'
 
   return <div className='flex flex-col gap-0'>
     <Card className={cn('overflow-hidden', sourceLinks.length > 0 && 'rounded-br-none')}>
