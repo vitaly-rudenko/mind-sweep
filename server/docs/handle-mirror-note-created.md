@@ -1,4 +1,4 @@
-# Handle new Note in a Mirror Bucket
+# Handle Note created in a Mirror Bucket
 
 ## Diagram
 
@@ -23,17 +23,15 @@ app ->> db: Get links for the Mirror Bucket
 db ->> app: [Links]
 
 loop Every Link
-  opt Link.SourceBucket was not activated?
-    opt isMatching(Note, Link)?
-      app ->>+ source: Create Note
-      source ->>- app: OK
-  
-      opt Link.stopOnMatch?
-        app -x app: Stop loop
-      end
-      
-      app ->> app: Mark Link.SourceBucket as activated
+  opt Link.SourceBucket was not processed? & isMatching(Note, Link)?
+    app ->>+ source: Create Note
+    source ->>- app: OK
+
+    opt Link.stopOnMatch?
+      app -x app: Stop loop
     end
+
+    app ->> app: Mark Link.SourceBucket as processed
   end
 end
 

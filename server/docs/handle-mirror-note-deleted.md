@@ -1,4 +1,4 @@
-# Handle deleted Note in a Mirror Bucket
+# Handle Note deleted in a Mirror Bucket
 
 ## Diagram
 
