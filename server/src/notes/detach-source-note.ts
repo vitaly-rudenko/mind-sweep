@@ -1,3 +1,4 @@
+import { NotFoundError, UnsupportedActionError } from '../errors.js'
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
 
@@ -12,15 +13,15 @@ export async function detachSourceNote(
   const { userId, sourceBucketId, mirrorVendorEntityQuery } = input
 
   const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
-  if (!sourceBucket) throw new Error('Source bucket not found')
+  if (!sourceBucket) throw new NotFoundError('SourceBucket not found', { sourceBucketId })
 
   if (sourceBucket.bucketType === 'notion_database') {
-    await notionBucket.detachNote({
+    await notionBucket.detachSourceNote({
       userId,
-      bucketId: sourceBucket.id,
+      sourceBucketId,
       mirrorVendorEntityQuery,
     })
   } else {
-    throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
+    throw new UnsupportedActionError('Unsupported SourceBucketType', { sourceBucketType: sourceBucket.bucketType })
   }
 }

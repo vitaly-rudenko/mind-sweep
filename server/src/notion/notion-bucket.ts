@@ -80,22 +80,22 @@ export class NotionBucket {
     })
   }
 
-  async detachNote(input: {
+  async detachSourceNote(input: {
     userId: number
-    bucketId: number
+    sourceBucketId: number
     mirrorVendorEntityQuery: VendorEntityQuery
   }): Promise<void> {
-    const { mirrorVendorEntityQuery, bucketId, userId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
+    const { mirrorVendorEntityQuery, sourceBucketId, userId } = input
+    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
 
     const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery })
-    if (page) {
-      await this.client.pages.update({
-        auth: integration.metadata.integrationSecret,
-        page_id: page.id,
-        properties: this.serializeNote({ mirrorVendorEntity: null }),
-      })
-    }
+    if (!page) return
+
+    await this.client.pages.update({
+      auth: integration.metadata.integrationSecret,
+      page_id: page.id,
+      properties: this.serializeNote({ mirrorVendorEntity: null }),
+    })
   }
 
   async deleteSourceNote(input: {
