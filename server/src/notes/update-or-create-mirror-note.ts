@@ -48,6 +48,10 @@ async function telegramBucketUpdateOrCreateMirrorNote(
     throw new UnsupportedActionError('Unsupported MirrorVendorEntityType', { mirrorVendorEntityType: note.mirrorVendorEntity.vendorEntityType })
   }
 
+  if (note.mirrorVendorEntity.hash === createVendorEntityHash(note.content)) {
+    return { ...note, mirrorVendorEntity: note.mirrorVendorEntity }
+  }
+
   try {
     let message: Message.TextMessage | true = await telegram.editMessageText(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId, undefined, note.content)
     if (message !== true) {
