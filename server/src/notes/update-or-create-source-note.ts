@@ -17,6 +17,8 @@ export async function updateOrCreateSourceNote(
   const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
   if (!sourceBucket) throw new NotFoundError('SourceBucket not found', { sourceBucketId })
 
+  // TODO: check if Note belongs to the Bucket?
+
   if (sourceBucket.bucketType === 'notion_database') {
     return notionBucket.updateOrCreateSourceNote({
       userId,
