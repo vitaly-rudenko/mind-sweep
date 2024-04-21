@@ -3,7 +3,6 @@ import type { Link } from '../links/types.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
 import { VendorEntityQuery } from '../vendor-entities/types.js'
-import { createMirrorNote } from './create-mirror-note.js'
 import { deleteMirrorNote } from './delete-mirror-note.js'
 import { detachSourceNote } from './detach-source-note.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
@@ -38,10 +37,26 @@ export async function syncSourceNotes(
 
         if (!mirrorNote) {
           if (isMirrorNote(note) && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
-            mirrorNote = await createMirrorNote({ userId, mirrorBucketId, note })
+            mirrorNote = await updateOrCreateMirrorNote({
+              userId,
+              mirrorBucketId,
+              note: {
+                content: note.content,
+                tags: [...note.tags, ...matchingLink.defaultTags ?? []],
+              },
+            })
+
             await deleteMirrorNote({ mirrorVendorEntity: note.mirrorVendorEntity })
           } else {
-            mirrorNote = await updateOrCreateMirrorNote({ userId, mirrorBucketId, note })
+            mirrorNote = await updateOrCreateMirrorNote({
+              userId,
+              mirrorBucketId,
+              note: {
+                content: note.content,
+                tags: [...note.tags, ...matchingLink.defaultTags ?? []],
+                mirrorVendorEntity: note.mirrorVendorEntity,
+              },
+            })
           }
 
           if (note.mirrorVendorEntity) {
@@ -53,7 +68,12 @@ export async function syncSourceNotes(
           userId,
           sourceBucketId,
           mirrorVendorEntityQuery: note.mirrorVendorEntity,
-          note: mirrorNote,
+          note: {
+            content: mirrorNote.content,
+            tags: [...note.tags, ...matchingLink.defaultTags ?? []],
+            mirrorVendorEntity: mirrorNote.mirrorVendorEntity,
+            sourceVendorEntity: note.sourceVendorEntity,
+          },
         })
       } else if (isMirrorNote(note) && isNoteStoredInMirrorBucket(note, mirrorBucket)) {
         await detachSourceNote({
@@ -81,5 +101,5 @@ function isMirrorNote(note: Note): note is MirrorNote {
 }
 
 function unique<T>(array: T[]): T[] {
-  return Array.from(new Set(array))
+  return [...new Set(array)]
 }
