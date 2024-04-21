@@ -1,3 +1,5 @@
+import { NotFoundError } from '../errors.js'
+import type { Link } from '../links/types.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
 import { VendorEntityQuery, type VendorEntity } from '../vendor-entities/types.js'
@@ -5,7 +7,7 @@ import { deleteMirrorNote } from './delete-mirror-note.js'
 import { detachSourceNote } from './detach-source-note.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
 import { readSourceNotes } from './read-source-notes.js'
-import type { Note } from './types.js'
+import type { MirrorNote, Note } from './types.js'
 import { updateOrCreateMirrorNote } from './update-or-create-mirror-note.js'
 import { updateOrCreateSourceNote } from './update-or-create-source-note.js'
 
@@ -19,62 +21,45 @@ export async function syncSourceNotes(
   const { userId, mirrorBucketId } = input
 
   const mirrorBucket = await storage.getBucketById(userId, mirrorBucketId)
-  if (!mirrorBucket) throw new Error('Mirror bucket not found')
+  if (!mirrorBucket) throw new NotFoundError('MirrorBucket not found', { mirrorBucketId })
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
-  const sourceBucketIds = new Set(links.map(link => link.sourceBucketId))
+  const cachedMirrorNotes = new Map<string, MirrorNote>()
 
-  const updatedMirrorNotes: { originalMirrorVendorEntityQuery: VendorEntityQuery; updatedMirrorNote: Note }[] = []
-
-  for (const sourceBucketId of sourceBucketIds) {
-    const notes = await readSourceNotes({ userId, bucketId: sourceBucketId })
+  for (const sourceBucketId of unique(links.map(link => link.sourceBucketId))) {
+    const notes = await readSourceNotes({ userId, sourceBucketId })
 
     for (const note of notes) {
-      const matchingLinks = links.filter(link => !link.template || isMatching({ content: note.content, template: link.template }))
-      const stopOnMatchIndex = matchingLinks.findIndex(link => link.settings.stopOnMatch)
-      const matchingLinksBeforeStopped = stopOnMatchIndex === -1 ? matchingLinks : matchingLinks.slice(0, stopOnMatchIndex + 1)
-      const matchingLinkBeforeStoppedForSourceBucket = matchingLinksBeforeStopped.find(link => link.sourceBucketId === sourceBucketId)
+      const matchingLink = getMatchingLinks(note, links).find(link => link.sourceBucketId === sourceBucketId)
 
-      if (matchingLinkBeforeStoppedForSourceBucket) {
-        const updatedMirrorNote = updatedMirrorNotes.find(entry => (
-          entry.originalMirrorVendorEntityQuery.vendorEntityType === note.mirrorVendorEntity?.vendorEntityType &&
-          entry.originalMirrorVendorEntityQuery.id === note.mirrorVendorEntity?.id
-        ))?.updatedMirrorNote
+      if (matchingLink) {
+        let mirrorNote = note.mirrorVendorEntity
+          ? cachedMirrorNotes.get(serializeVendorEntityQuery(note.mirrorVendorEntity))
+          : undefined
 
-        let noteToUpdate: Note = {
-          ...note,
-          ...updatedMirrorNote,
-          sourceVendorEntity: note.sourceVendorEntity,
-        }
+        if (!mirrorNote) {
+          if (isMirrorNote(note) && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
+            mirrorNote = await updateOrCreateMirrorNote({
+              userId,
+              mirrorBucketId,
+              note: { ...note, mirrorVendorEntity: undefined }
+            })
 
-        if (note.mirrorVendorEntity && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
-          await deleteMirrorNote({ note })
-
-          noteToUpdate = {
-            ...note,
-            mirrorVendorEntity: undefined,
+            await deleteMirrorNote({ mirrorVendorEntity: note.mirrorVendorEntity })
+          } else {
+            mirrorNote = await updateOrCreateMirrorNote({ userId, mirrorBucketId, note })
           }
-        }
 
-        const mirrorNote = await updateOrCreateMirrorNote({
-          userId,
-          mirrorBucketId,
-          note: noteToUpdate,
-        })
-
-        if (note.mirrorVendorEntity && mirrorNote.mirrorVendorEntity) {
-          updatedMirrorNotes.push({
-            originalMirrorVendorEntityQuery: note.mirrorVendorEntity,
-            updatedMirrorNote: mirrorNote,
-          })
+          cachedMirrorNotes.set(serializeVendorEntityQuery(mirrorNote.mirrorVendorEntity), mirrorNote)
         }
 
         await updateOrCreateSourceNote({
           userId,
           sourceBucketId,
+          mirrorVendorEntityQuery: note.mirrorVendorEntity,
           note: mirrorNote,
         })
-      } else if (note.mirrorVendorEntity && isNoteStoredInMirrorBucket(note, mirrorBucket)) {
+      } else if (isMirrorNote(note) && isNoteStoredInMirrorBucket(note, mirrorBucket)) {
         await detachSourceNote({
           userId,
           sourceBucketId,
@@ -85,3 +70,20 @@ export async function syncSourceNotes(
   }
 }
 
+function serializeVendorEntityQuery(vendorEntityQuery: VendorEntityQuery): string {
+  return `${vendorEntityQuery.vendorEntityType}_${vendorEntityQuery.id}`
+}
+
+function getMatchingLinks(note: Note, links: Link[]) {
+  const matchingLinks = links.filter(link => !link.template || isMatching({ content: note.content, template: link.template }))
+  const stopOnMatchIndex = matchingLinks.findIndex(link => link.settings.stopOnMatch)
+  return stopOnMatchIndex === -1 ? matchingLinks : matchingLinks.slice(0, stopOnMatchIndex + 1)
+}
+
+function isMirrorNote(note: Note): note is MirrorNote {
+  return Boolean(note.mirrorVendorEntity)
+}
+
+function unique<T>(array: T[]): T[] {
+  return Array.from(new Set(array))
+}
