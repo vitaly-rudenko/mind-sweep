@@ -46,3 +46,9 @@ export class UnsupportedActionError extends ApiError {
     super({ code: 'UNSUPPORTED_ACTION', status: 400, message , context})
   }
 }
+
+export class InvalidResourceError extends ApiError {
+  constructor(message = 'Invalid resource', context?: unknown) {
+    super({ code: 'INVALID_RESOURCE', status: 400, message , context})
+  }
+}
