@@ -1,6 +1,7 @@
+import { NotFoundError, UnsupportedActionError } from '../errors.js'
 import { type Deps, registry } from '../registry.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
-import type { Note } from './types.js'
+import type { Note, SourceNote } from './types.js'
 
 export async function updateOrCreateSourceNote(
   input: {
@@ -10,20 +11,20 @@ export async function updateOrCreateSourceNote(
     note: Note
   },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-): Promise<void> {
+): Promise<SourceNote> {
   const { userId, sourceBucketId, mirrorVendorEntityQuery, note } = input
 
   const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
-  if (!sourceBucket) throw new Error('Source bucket not found')
+  if (!sourceBucket) throw new NotFoundError('SourceBucket not found', { sourceBucketId })
 
   if (sourceBucket.bucketType === 'notion_database') {
-    await notionBucket.updateOrCreateNote({
+    return notionBucket.updateOrCreateSourceNote({
       userId,
       bucketId: sourceBucket.id,
       mirrorVendorEntityQuery,
       note,
     })
   } else {
-    throw new Error(`Unsupported source bucket type: ${sourceBucket.bucketType}`)
+    throw new UnsupportedActionError('Unsupported SourceBucketType', { sourceBucketType: sourceBucket.bucketType })
   }
 }

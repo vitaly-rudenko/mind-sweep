@@ -9,6 +9,7 @@ import { serializeNotionMirrorVendorEntity } from './serialize-notion-mirror-ven
 import { deserializeNotionMirrorVendorEntity } from './deserialize-notion-mirror-vendor-entity.js'
 import { createNotionVendorEntity } from './create-notion-vendor-entity.js'
 import type { PartiallyNullable } from '../utils/types.js'
+import { InvalidResourceError } from '../errors.js'
 
 type Page = PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse
 
@@ -30,18 +31,21 @@ export class NotionBucket {
     return pages.results.map(page => this.deserializeNote(bucket.metadata.databaseId, page))
   }
 
-  async updateOrCreateNote(input: {
+  async updateOrCreateSourceNote(input: {
     userId: number
     bucketId: number
     mirrorVendorEntityQuery?: VendorEntityQuery
     note: Note
-  }): Promise<void> {
+  }): Promise<SourceNote> {
     const { note, mirrorVendorEntityQuery, bucketId, userId } = input
     const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
 
     let pageId: string | undefined
     if (note.sourceVendorEntity) {
-      if (note.sourceVendorEntity.vendorEntityType !== 'notion_page') throw new Error(`Invalid source vendor entity type: ${note.sourceVendorEntity.vendorEntityType}`)
+      if (note.sourceVendorEntity.vendorEntityType !== 'notion_page') {
+        throw new InvalidResourceError('Invalid SourceVendorEntityType', { vendorEntityType: note.sourceVendorEntity.vendorEntityType })
+      }
+
       pageId = note.sourceVendorEntity.metadata.pageId
     } else if (mirrorVendorEntityQuery) {
       const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery })
@@ -49,17 +53,21 @@ export class NotionBucket {
     }
 
     if (pageId) {
-      await this.client.pages.update({
+      const page = await this.client.pages.update({
         auth: integration.metadata.integrationSecret,
         page_id: pageId,
         properties: this.serializeNote(note),
       })
+
+      return this.deserializeNote(bucket.metadata.databaseId, page)
     } else {
-      await this.client.pages.create({
+      const page = await this.client.pages.create({
         auth: integration.metadata.integrationSecret,
         parent: { database_id: bucket.metadata.databaseId },
         properties: this.serializeNote(note),
       })
+
+      return this.deserializeNote(bucket.metadata.databaseId, page)
     }
   }
 
