@@ -2,7 +2,8 @@ import { NotFoundError } from '../errors.js'
 import type { Link } from '../links/types.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
-import { VendorEntityQuery, type VendorEntity } from '../vendor-entities/types.js'
+import { VendorEntityQuery } from '../vendor-entities/types.js'
+import { createMirrorNote } from './create-mirror-note.js'
 import { deleteMirrorNote } from './delete-mirror-note.js'
 import { detachSourceNote } from './detach-source-note.js'
 import { isNoteStoredInMirrorBucket } from './is-note-stored-in-mirror-bucket.js'
@@ -33,24 +34,19 @@ export async function syncSourceNotes(
       const matchingLink = getMatchingLinks(note, links).find(link => link.sourceBucketId === sourceBucketId)
 
       if (matchingLink) {
-        let mirrorNote = note.mirrorVendorEntity
-          ? cachedMirrorNotes.get(serializeVendorEntityQuery(note.mirrorVendorEntity))
-          : undefined
+        let mirrorNote = note.mirrorVendorEntity ? cachedMirrorNotes.get(serializeVendorEntityQuery(note.mirrorVendorEntity)) : undefined
 
         if (!mirrorNote) {
           if (isMirrorNote(note) && !isNoteStoredInMirrorBucket(note, mirrorBucket)) {
-            mirrorNote = await updateOrCreateMirrorNote({
-              userId,
-              mirrorBucketId,
-              note: { ...note, mirrorVendorEntity: undefined }
-            })
-
+            mirrorNote = await createMirrorNote({ userId, mirrorBucketId, note })
             await deleteMirrorNote({ mirrorVendorEntity: note.mirrorVendorEntity })
           } else {
             mirrorNote = await updateOrCreateMirrorNote({ userId, mirrorBucketId, note })
           }
 
-          cachedMirrorNotes.set(serializeVendorEntityQuery(mirrorNote.mirrorVendorEntity), mirrorNote)
+          if (note.mirrorVendorEntity) {
+            cachedMirrorNotes.set(serializeVendorEntityQuery(note.mirrorVendorEntity), mirrorNote)
+          }
         }
 
         await updateOrCreateSourceNote({
