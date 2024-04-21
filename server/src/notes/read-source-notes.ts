@@ -1,21 +1,19 @@
+import { NotFoundError, UnsupportedActionError } from '../errors.js';
 import { type Deps, registry } from '../registry.js'
-import type { Note } from './types.js'
+import type { SourceNote } from './types.js';
 
 export async function readSourceNotes(
-  input: { userId: number; bucketId: number },
+  input: { userId: number; sourceBucketId: number },
   { storage, notionBucket }: Deps<'storage' | 'notionBucket'> = registry.export()
-): Promise<Note[]> {
-  const { userId, bucketId } = input
+): Promise<SourceNote[]> {
+  const { userId, sourceBucketId } = input
 
-  const bucket = await storage.getBucketById(userId, bucketId)
-  if (!bucket) throw new Error(`Bucket not found: ${bucketId}`)
+  const sourceBucket = await storage.getBucketById(userId, sourceBucketId)
+  if (!sourceBucket) throw new NotFoundError('SourceBucket not found', { sourceBucketId })
 
-  const integration = await storage.getIntegrationById(userId, bucket.integrationId)
-  if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
-
-  if (bucket.bucketType === 'notion_database' && integration.integrationType === 'notion') {
-    return notionBucket.readNotes({ bucket, integration })
+  if (sourceBucket.bucketType === 'notion_database') {
+    return notionBucket.readSourceNotes({ userId, sourceBucketId })
   } else {
-    throw new Error('Unsupported source bucket type')
+    throw new UnsupportedActionError('Unsupported SourceBucketType', { sourceBucketType: sourceBucket.bucketType })
   }
 }

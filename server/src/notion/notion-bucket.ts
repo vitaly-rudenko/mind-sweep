@@ -3,7 +3,7 @@ import type { PostgresStorage } from '../postgres-storage.js'
 import type { PageObjectResponse, PartialPageObjectResponse, PartialDatabaseObjectResponse, DatabaseObjectResponse, UpdatePageParameters, CreatePageParameters } from '@notionhq/client/build/src/api-endpoints.js'
 import type { Bucket } from '../buckets/types.js'
 import type { Integration } from '../integrations/types.js'
-import type { Note } from '../notes/types.js'
+import type { Note, SourceNote } from '../notes/types.js'
 import type { VendorEntityQuery, VendorEntity } from '../vendor-entities/types.js'
 import { serializeNotionMirrorVendorEntity } from './serialize-notion-mirror-vendor-entity.js'
 import { deserializeNotionMirrorVendorEntity } from './deserialize-notion-mirror-vendor-entity.js'
@@ -18,11 +18,9 @@ export class NotionBucket {
     private readonly client: Client = new Client(),
   ) {}
 
-  async readNotes(input: {
-    bucket: Extract<Bucket, { bucketType: 'notion_database' }>
-    integration: Extract<Integration, { integrationType: 'notion' }>
-  }): Promise<Note[]> {
-    const { bucket, integration } = input
+  async readSourceNotes(input: { userId: number, sourceBucketId: number }): Promise<SourceNote[]> {
+    const { userId, sourceBucketId } = input
+    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
 
     const pages = await this.client.databases.query({
       database_id: bucket.metadata.databaseId,
@@ -188,7 +186,7 @@ export class NotionBucket {
     }
   }
 
-  private deserializeNote(databaseId: string, page: PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse): Note {
+  private deserializeNote(databaseId: string, page: PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse): SourceNote {
     if (page.object !== 'page' || !('properties' in page)) {
       throw new Error(`Not a page object or does not have properties: ${page.id}`)
     }

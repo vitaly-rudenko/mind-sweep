@@ -6,3 +6,6 @@ export type Note = {
   sourceVendorEntity?: VendorEntity
   mirrorVendorEntity?: VendorEntity
 }
+
+export type SourceNote = Note & { sourceVendorEntity: VendorEntity }
+export type MirrorNote = Note & { mirrorVendorEntity: VendorEntity }
