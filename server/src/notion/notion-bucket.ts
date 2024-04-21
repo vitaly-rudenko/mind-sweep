@@ -98,13 +98,13 @@ export class NotionBucket {
     }
   }
 
-  async deleteNote(input: {
+  async deleteSourceNote(input: {
     userId: number
-    bucketId: number
+    sourceBucketId: number
     mirrorVendorEntityQuery: VendorEntityQuery
   }): Promise<void> {
-    const { userId, bucketId, mirrorVendorEntityQuery } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
+    const { userId, sourceBucketId, mirrorVendorEntityQuery } = input
+    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
 
     const page = await this.getPageByMirrorVendorEntityQuery({ integration, bucket, mirrorVendorEntityQuery })
     if (!page) return
