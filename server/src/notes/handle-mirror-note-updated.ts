@@ -1,4 +1,5 @@
 import type { BucketQuery } from '../buckets/types.js'
+import { NotFoundError } from '../errors.js'
 import { type Deps, registry } from '../registry.js'
 import { isMatching } from '../templates/match.js'
 import type { VendorEntityQuery } from '../vendor-entities/types.js'
@@ -17,12 +18,12 @@ export async function handleMirrorNoteUpdated(
 ): Promise<void> {
   const { userId, note, mirrorBucketQuery, mirrorVendorEntityQuery } = input
 
-  const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
-  if (!mirrorBucket) throw new Error('Mirror bucket not found')
+  const mirrorBucket = await storage.queryBucket(userId, mirrorBucketQuery)
+  if (!mirrorBucket) throw new NotFoundError('MirrorBucket not found', { mirrorBucketQuery })
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
-
   const processedSourceBucketIds = new Set<number>()
+
   for (const link of links) {
     if (processedSourceBucketIds.has(link.sourceBucketId)) continue
     if (link.template && !isMatching({ content: note.content, template: link.template })) continue
@@ -39,7 +40,6 @@ export async function handleMirrorNoteUpdated(
     })
 
     processedSourceBucketIds.add(link.sourceBucketId)
-
     if (link.settings.stopOnMatch) break
   }
 
