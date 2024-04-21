@@ -1,27 +1,29 @@
 import { TelegramError } from 'telegraf'
-import { logger } from '../logging/logger.js'
 import { type Deps, registry } from '../registry.js'
-import type { Note } from './types.js'
+import type { VendorEntity } from '../vendor-entities/types.js'
+import { UnsupportedActionError } from '../errors.js'
 
 export async function deleteMirrorNote(
   input: {
-    note: Note
+    mirrorVendorEntity: VendorEntity
   },
-  { storage, telegram }: Deps<'storage' | 'telegram'> = registry.export()
+  { telegram }: Deps<'storage' | 'telegram'> = registry.export()
 ): Promise<void> {
-  const { note } = input
+  const { mirrorVendorEntity } = input
 
-  if (!note.mirrorVendorEntity) throw new Error('Note does not have a mirror vendor entity')
-
-  if (note.mirrorVendorEntity.vendorEntityType === 'telegram_message') {
+  if (mirrorVendorEntity.vendorEntityType === 'telegram_message') {
     try {
-      await telegram.deleteMessage(note.mirrorVendorEntity.metadata.chatId, note.mirrorVendorEntity.metadata.messageId)
+      await telegram.deleteMessage(mirrorVendorEntity.metadata.chatId, mirrorVendorEntity.metadata.messageId)
     } catch (err) {
-      if (err instanceof TelegramError && err.response.description !== 'Bad Request: message to delete not found') {
-        logger.error({ err }, 'Could not delete message')
+      if (err instanceof TelegramError && err.response.description === 'Bad Request: message can\'t be deleted for everyone') {
+        await telegram.setMessageReaction(mirrorVendorEntity.metadata.chatId, mirrorVendorEntity.metadata.messageId, [{ type: 'emoji', emoji: '💩' }])
+      } else if (err instanceof TelegramError && err.response.description === 'Bad Request: message to delete not found') {
+        // ok
+      } else {
+        throw err
       }
     }
   } else {
-    throw new Error('Unsupported vendor entity type for given bucket type')
+    throw new UnsupportedActionError('Unsupported MirrorVendorEntityType', { mirrorVendorEntityType: mirrorVendorEntity.vendorEntityType })
   }
 }
