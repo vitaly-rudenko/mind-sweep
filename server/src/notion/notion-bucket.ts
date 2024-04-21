@@ -65,13 +65,13 @@ export class NotionBucket {
     }
   }
 
-  async createNote(input: {
+  async createSourceNote(input: {
     userId: number
-    bucketId: number
+    sourceBucketId: number
     note: Note
   }): Promise<void> {
-    const { note, bucketId, userId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
+    const { note, sourceBucketId, userId } = input
+    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
 
     await this.client.pages.create({
       auth: integration.metadata.integrationSecret,
