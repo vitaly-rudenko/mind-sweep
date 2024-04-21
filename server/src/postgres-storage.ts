@@ -283,7 +283,7 @@ export class PostgresStorage {
     return rows[0] ? this.deserializeBucket(rows[0]) : undefined
   }
 
-  async getBucketByQueryId(userId: number, bucketQuery: BucketQuery): Promise<Bucket | undefined> {
+  async queryBucket(userId: number, bucketQuery: BucketQuery): Promise<Bucket | undefined> {
     const { rows } = await this.client.query<BucketRow>(`
       SELECT b.*
       FROM buckets b

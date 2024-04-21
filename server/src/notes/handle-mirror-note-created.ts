@@ -1,6 +1,7 @@
 import type { BucketQuery } from '../buckets/types.js'
+import { NotFoundError } from '../errors.js'
 import { type Deps, registry } from '../registry.js'
-import { isMatching, match } from '../templates/match.js'
+import { isMatching } from '../templates/match.js'
 import { createSourceNote } from './create-source-note.js'
 import type { Note } from './types.js'
 
@@ -14,8 +15,8 @@ export async function handleMirrorNoteCreated(
 ): Promise<void> {
   const { userId, note, mirrorBucketQuery } = input
 
-  const mirrorBucket = await storage.getBucketByQueryId(userId, mirrorBucketQuery)
-  if (!mirrorBucket) throw new Error('Mirror bucket not found')
+  const mirrorBucket = await storage.queryBucket(userId, mirrorBucketQuery)
+  if (!mirrorBucket) throw new NotFoundError('MirrorBucket not found', { mirrorBucketQuery })
 
   const links = await storage.getLinksByMirrorBucketId(userId, mirrorBucket.id)
   const processedSourceBucketIds = new Set<number>()
