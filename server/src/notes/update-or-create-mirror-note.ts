@@ -21,7 +21,7 @@ export async function updateOrCreateMirrorNote(
   if (mirrorBucket.bucketType === 'telegram_chat') {
     return telegramBucketUpdateOrCreateMirrorNote({ userId, mirrorBucketId, note })
   } else {
-    throw new Error(`Unsupported mirror bucket type: ${mirrorBucket.bucketType}`)
+    throw new UnsupportedActionError('Unsupported MirrorBucketType', { mirrorBucketType: mirrorBucket.bucketType })
   }
 }
 

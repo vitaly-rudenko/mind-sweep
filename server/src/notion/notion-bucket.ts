@@ -9,7 +9,7 @@ import { serializeNotionMirrorVendorEntity } from './serialize-notion-mirror-ven
 import { deserializeNotionMirrorVendorEntity } from './deserialize-notion-mirror-vendor-entity.js'
 import { createNotionVendorEntity } from './create-notion-vendor-entity.js'
 import type { PartiallyNullable } from '../utils/types.js'
-import { InvalidResourceError } from '../errors.js'
+import { InvalidResourceError, NotFoundError, UnsupportedActionError } from '../errors.js'
 
 type Page = PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse
 
@@ -21,14 +21,14 @@ export class NotionBucket {
 
   async readSourceNotes(input: { userId: number, sourceBucketId: number }): Promise<SourceNote[]> {
     const { userId, sourceBucketId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
+    const { sourceBucket, integration } = await this.getSourceBucketAndIntegration(userId, sourceBucketId)
 
     const pages = await this.client.databases.query({
-      database_id: bucket.metadata.databaseId,
+      database_id: sourceBucket.metadata.databaseId,
       auth: integration.metadata.integrationSecret,
     });
 
-    return pages.results.map(page => this.deserializeNote(bucket.metadata.databaseId, page))
+    return pages.results.map(page => this.deserializeNote(sourceBucket.metadata.databaseId, page))
   }
 
   async updateOrCreateSourceNote(input: {
@@ -38,7 +38,7 @@ export class NotionBucket {
     note: Note
   }): Promise<SourceNote> {
     const { note, mirrorVendorEntityQuery, bucketId, userId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, bucketId)
+    const { sourceBucket, integration } = await this.getSourceBucketAndIntegration(userId, bucketId)
 
     let pageId: string | undefined
     if (note.sourceVendorEntity) {
@@ -48,7 +48,7 @@ export class NotionBucket {
 
       pageId = note.sourceVendorEntity.metadata.pageId
     } else if (mirrorVendorEntityQuery) {
-      const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery })
+      const page = await this.getPageByMirrorVendorEntityQuery({ sourceBucket, integration, mirrorVendorEntityQuery })
       pageId = page?.id
     }
 
@@ -59,15 +59,15 @@ export class NotionBucket {
         properties: this.serializeNote(note),
       })
 
-      return this.deserializeNote(bucket.metadata.databaseId, page)
+      return this.deserializeNote(sourceBucket.metadata.databaseId, page)
     } else {
       const page = await this.client.pages.create({
         auth: integration.metadata.integrationSecret,
-        parent: { database_id: bucket.metadata.databaseId },
+        parent: { database_id: sourceBucket.metadata.databaseId },
         properties: this.serializeNote(note),
       })
 
-      return this.deserializeNote(bucket.metadata.databaseId, page)
+      return this.deserializeNote(sourceBucket.metadata.databaseId, page)
     }
   }
 
@@ -77,11 +77,11 @@ export class NotionBucket {
     note: Note
   }): Promise<void> {
     const { note, sourceBucketId, userId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
+    const { sourceBucket, integration } = await this.getSourceBucketAndIntegration(userId, sourceBucketId)
 
     await this.client.pages.create({
       auth: integration.metadata.integrationSecret,
-      parent: { database_id: bucket.metadata.databaseId },
+      parent: { database_id: sourceBucket.metadata.databaseId },
       properties: this.serializeNote(note),
     })
   }
@@ -92,9 +92,9 @@ export class NotionBucket {
     mirrorVendorEntityQuery: VendorEntityQuery
   }): Promise<void> {
     const { mirrorVendorEntityQuery, sourceBucketId, userId } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
+    const { sourceBucket, integration } = await this.getSourceBucketAndIntegration(userId, sourceBucketId)
 
-    const page = await this.getPageByMirrorVendorEntityQuery({ bucket, integration, mirrorVendorEntityQuery })
+    const page = await this.getPageByMirrorVendorEntityQuery({ sourceBucket, integration, mirrorVendorEntityQuery })
     if (!page) return
 
     await this.client.pages.update({
@@ -110,9 +110,9 @@ export class NotionBucket {
     mirrorVendorEntityQuery: VendorEntityQuery
   }): Promise<void> {
     const { userId, sourceBucketId, mirrorVendorEntityQuery } = input
-    const { bucket, integration } = await this.getBucketAndIntegration(userId, sourceBucketId)
+    const { sourceBucket, integration } = await this.getSourceBucketAndIntegration(userId, sourceBucketId)
 
-    const page = await this.getPageByMirrorVendorEntityQuery({ integration, bucket, mirrorVendorEntityQuery })
+    const page = await this.getPageByMirrorVendorEntityQuery({ integration, sourceBucket, mirrorVendorEntityQuery })
     if (!page) return
 
     await this.client.pages.update({
@@ -122,27 +122,27 @@ export class NotionBucket {
     })
   }
 
-  private async getBucketAndIntegration(userId: number, bucketId: number) {
-    const bucket = await this.storage.getBucketById(userId, bucketId)
-    if (!bucket) throw new Error(`Bucket not found: ${bucketId}`)
-    if (bucket.bucketType !== 'notion_database') throw new Error(`Unsupported bucket type: ${bucket.bucketType}`)
+  private async getSourceBucketAndIntegration(userId: number, sourceBucketId: number) {
+    const sourceBucket = await this.storage.getBucketById(userId, sourceBucketId)
+    if (!sourceBucket) throw new NotFoundError('SourceBucket not found', { bucketId: sourceBucketId })
+    if (sourceBucket.bucketType !== 'notion_database') throw new UnsupportedActionError('Unsupported SourceBucketType', { sourceBucketType: sourceBucket.bucketType })
 
-    const integration = await this.storage.getIntegrationById(userId, bucket.integrationId)
-    if (!integration) throw new Error(`Integration not found: ${bucket.integrationId}`)
-    if (integration.integrationType !== 'notion') throw new Error(`Unsupported integration type: ${integration.integrationType}`)
+    const integration = await this.storage.getIntegrationById(userId, sourceBucket.integrationId)
+    if (!integration) throw new NotFoundError('Integration not found', { integrationId: sourceBucket.integrationId })
+    if (integration.integrationType !== 'notion') throw new UnsupportedActionError('Unsupported IntegrationType', { integrationType: integration.integrationType })
 
-    return { bucket, integration }
+    return { sourceBucket, integration }
   }
 
   private async getPageByMirrorVendorEntityQuery(input: {
     integration: Extract<Integration, { integrationType: 'notion' }>
-    bucket: Extract<Bucket, { bucketType: 'notion_database' }>
+    sourceBucket: Extract<Bucket, { bucketType: 'notion_database' }>
     mirrorVendorEntityQuery: VendorEntityQuery
   }): Promise<Page | undefined> {
-    const { mirrorVendorEntityQuery, integration, bucket } = input
+    const { mirrorVendorEntityQuery, integration, sourceBucket } = input
 
     const pages = await this.client.databases.query({
-      database_id: bucket.metadata.databaseId,
+      database_id: sourceBucket.metadata.databaseId,
       auth: integration.metadata.integrationSecret,
       filter: {
         property: 'mind_sweep:mirror_vendor_entity',
@@ -196,22 +196,22 @@ export class NotionBucket {
 
   private deserializeNote(databaseId: string, page: PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse | DatabaseObjectResponse): SourceNote {
     if (page.object !== 'page' || !('properties' in page)) {
-      throw new Error(`Not a page object or does not have properties: ${page.id}`)
+      throw new InvalidResourceError('Not a page object or does not have properties', { pageId: page.id })
     }
 
     const nameProperty = page.properties['Name']
     if (!nameProperty || nameProperty.type !== 'title') {
-      throw new Error(`Page does not have valid Name property: ${page.id}`)
+      throw new InvalidResourceError('Page does not have valid Name property', { pageId: page.id, nameProperty })
     }
 
     const tagsProperty = page.properties['Tags']
     if (!tagsProperty || tagsProperty.type !== 'multi_select') {
-      throw new Error(`Page does not have valid Tags property: ${page.id}`)
+      throw new InvalidResourceError('Page does not have valid Tags property', { pageId: page.id, tagsProperty })
     }
 
     const mirrorVendorEntityProperty = page.properties['mind_sweep:mirror_vendor_entity']
     if (!mirrorVendorEntityProperty || mirrorVendorEntityProperty.type !== 'rich_text') {
-      throw new Error(`Page does not have valid MirrorVendorEntity property: ${page.id}`)
+      throw new InvalidResourceError('Page does not have valid MirrorVendorEntity property', { pageId: page.id, mirrorVendorEntityProperty })
     }
 
     const content = nameProperty.title[0].plain_text

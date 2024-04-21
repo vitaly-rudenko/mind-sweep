@@ -130,7 +130,7 @@ export function createBucketsRouter() {
   })
 
   router.get('/buckets/:id/notes', async (req, res) => {
-    const notes = await readSourceNotes({ userId: req.user.id, bucketId: Number(req.params.id) })
+    const notes = await readSourceNotes({ userId: req.user.id, sourceBucketId: Number(req.params.id) })
     res.json({ items: notes })
   })
 

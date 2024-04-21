@@ -1,5 +1,6 @@
 import { oneLineTrim } from 'common-tags'
 import type { VendorEntity } from '../vendor-entities/types.js'
+import { InvalidResourceError } from '../errors.js'
 
 const SERIALIZED_VENDOR_ENTITY_REGEX = new RegExp(oneLineTrim`
   ^(?<vendorEntityType>.+?)
@@ -10,7 +11,7 @@ const SERIALIZED_VENDOR_ENTITY_REGEX = new RegExp(oneLineTrim`
 
 export function deserializeNotionMirrorVendorEntity(serialized: string): VendorEntity {
   const match = serialized.match(SERIALIZED_VENDOR_ENTITY_REGEX)
-  if (!match?.groups) throw new Error(`Invalid serialized VendorEntity: ${serialized}`)
+  if (!match?.groups) throw new InvalidResourceError('Invalid serialized VendorEntity', { serialized })
 
   return {
     id: match.groups.id,
