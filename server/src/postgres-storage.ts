@@ -223,13 +223,9 @@ export class PostgresStorage {
 
   async getBucketsByUserId(userId: number): Promise<{ bucket: Bucket; sourceLinks: Link[] }[]> {
     const { rows } = await this.client.query<BucketRow>(`
-      SELECT b.*, COALESCE(json_agg(l.*) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
+      SELECT b.*, COALESCE(json_agg(l.* ORDER BY l.priority DESC) FILTER (WHERE l.id IS NOT NULL), '[]') AS source_links
       FROM buckets b
-      LEFT JOIN (
-        SELECT *
-        FROM links
-        ORDER BY priority DESC
-      ) l ON l.mirror_bucket_id = b.id
+      LEFT JOIN links l ON l.mirror_bucket_id = b.id
       WHERE b.user_id = $1
       GROUP BY b.id;
     `, [userId])
